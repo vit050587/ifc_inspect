@@ -1,0 +1,355 @@
+================================================================================
+IFC FILE INFORMATION
+================================================================================
+
+1. FILE HEADER INFORMATION
+----------------------------------------
+File Name: 35-РЕН-ПИР
+Time Stamp: 2021-11-08T13:09:36
+Author(s): 
+Organization: 
+Preprocessor Version: The EXPRESS Data Manager Version 5.02.0100.07 : 28 Aug 2013
+Originating System: 20190808_0900(x64) - Exporter 19.4.1.0 - Alternate UI 19.4.1.0
+Authorization: 
+Schema: IFC4
+
+2. PROJECT INFORMATION
+----------------------------------------
+Project Name: 35-РЕН-ПИР
+Project Description: N/A
+Project ObjectType: N/A
+Project LongName: Жилой дом с инженерными сетями и благоустройством территории по адресу: г.Москва, район Перово, ул.1-я Владимирская, влд. 47, з/у 1 (Восточный административный округ)
+Project Phase: 19.2
+Representation Contexts: 1
+
+3. BUILDING INFORMATION
+----------------------------------------
+Building Name: Жилой дом
+Building Description: N/A
+Building ObjectType: N/A
+
+4. BUILDING STOREY INFORMATION
+----------------------------------------
+Total Storeys: 23
+  - Storey Name: -1_Подземный этаж_основной
+    Description: N/A
+    Elevation: -6199.99999999916
+  - Storey Name: 1_Этаж_основной
+    Description: N/A
+    Elevation: 7.1942984902762e-10
+  - Storey Name: 2_Этаж_основной
+    Description: N/A
+    Elevation: 5099.99999999978
+  - Storey Name: 3_Этаж_основной
+    Description: N/A
+    Elevation: 8100.00000000049
+  - Storey Name: 4_Этаж_основной
+    Description: N/A
+    Elevation: 11100.0000000005
+  - Storey Name: 5_Этаж_основной
+    Description: N/A
+    Elevation: 14100.0000000005
+  - Storey Name: 6_Этаж_основной
+    Description: N/A
+    Elevation: 17100.0000000005
+  - Storey Name: 7_Этаж_основной
+    Description: N/A
+    Elevation: 20100.0000000005
+  - Storey Name: 8_Этаж_основной
+    Description: N/A
+    Elevation: 23100.0000000005
+  - Storey Name: 9_Этаж_основной
+    Description: N/A
+    Elevation: 26100.0000000005
+  - Storey Name: 10_Этаж_основной
+    Description: N/A
+    Elevation: 29100.0000000005
+  - Storey Name: 11_Этаж_основной
+    Description: N/A
+    Elevation: 32100.0000000005
+  - Storey Name: 12_Этаж_основной
+    Description: N/A
+    Elevation: 35100.0000000005
+  - Storey Name: 13_Этаж_основной
+    Description: N/A
+    Elevation: 38100.0000000005
+  - Storey Name: 14_Этаж_основной
+    Description: N/A
+    Elevation: 41100.0000000005
+  - Storey Name: 15_Этаж_основной
+    Description: N/A
+    Elevation: 44100.0000000005
+  - Storey Name: 16_Этаж_основной
+    Description: N/A
+    Elevation: 47100.0000000005
+  - Storey Name: 17_Этаж_основной
+    Description: N/A
+    Elevation: 50100.0000000005
+  - Storey Name: 18_Этаж_основной
+    Description: N/A
+    Elevation: 53100.0000000005
+  - Storey Name: 19_Этаж_основной
+    Description: N/A
+    Elevation: 56100.0000000005
+  - Storey Name: 20_Чердак_основной
+    Description: N/A
+    Elevation: 59100.0
+  - Storey Name: 21_Крыша
+    Description: N/A
+    Elevation: 61100.0
+  - Storey Name: 22_Крыша
+    Description: N/A
+    Elevation: 64160.0
+
+5. ELEMENT COUNTS BY TYPE
+----------------------------------------
+IfcPropertySingleValue: 25524
+IfcRelDefinesByProperties: 14667
+IfcPropertySet: 13710
+IfcIndexedPolygonalFace: 11031
+IfcAxis2Placement3D: 9355
+IfcIndexedPolyCurve: 6230
+IfcShapeRepresentation: 6049
+IfcCartesianPoint: 5621
+IfcCartesianPointList2D: 5009
+IfcQuantityLength: 4159
+IfcMaterialConstituent: 4049
+IfcColourRgbList: 3661
+IfcLocalPlacement: 3293
+IfcProductDefinitionShape: 3268
+IfcQuantityArea: 2734
+IfcQuantityVolume: 2723
+IfcExtrudedAreaSolid: 2489
+IfcArbitraryClosedProfileDef: 2295
+IfcStyledItem: 2165
+IfcElementQuantity: 1868
+IfcShapeAspect: 1397
+IfcMappedItem: 1378
+IfcCartesianPointList3D: 1372
+IfcBuildingElementProxy: 1291
+IfcWall: 1221
+IfcRelAssociatesMaterial: 1042
+IfcMaterialConstituentSet: 1008
+IfcOpeningElement: 490
+IfcRelVoidsElement: 490
+IfcRelDefinesByType: 340
+IfcDirection: 196
+IfcArbitraryProfileDefWithVoids: 194
+IfcIndexedPolygonalFaceWithVoids: 192
+IfcIndexedColourMap: 151
+IfcRepresentationMap: 146
+IfcPolygonalFaceSet: 145
+IfcSlab: 125
+IfcSlabType: 125
+IfcBuildingElementProxyType: 88
+IfcMaterial: 62
+IfcReinforcingMesh: 55
+IfcStair: 50
+IfcStairType: 50
+IfcColourRgb: 34
+IfcSurfaceStyleRendering: 34
+IfcSurfaceStyle: 34
+IfcPhysicalComplexQuantity: 33
+IfcColumnType: 32
+IfcColumn: 32
+IfcReinforcingMeshType: 26
+IfcDerivedUnitElement: 25
+IfcRelContainedInSpatialStructure: 23
+IfcBuildingStorey: 23
+IfcSIUnit: 19
+IfcGroup: 16
+IfcWallType: 15
+IfcPresentationLayerAssignment: 9
+IfcDerivedUnit: 9
+IfcTriangulatedFaceSet: 6
+IfcRampType: 4
+IfcRamp: 4
+IfcGeometricRepresentationSubContext: 4
+IfcRelAggregates: 3
+IfcOrganization: 2
+IfcCartesianTransformationOperator3D: 1
+IfcClassification: 1
+IfcSite: 1
+IfcBuilding: 1
+IfcUnitAssignment: 1
+IfcGeometricRepresentationContext: 1
+IfcProject: 1
+IfcApplication: 1
+IfcPerson: 1
+IfcPersonAndOrganization: 1
+IfcOwnerHistory: 1
+IfcDimensionalExponents: 1
+IfcMeasureWithUnit: 1
+IfcConversionBasedUnit: 1
+
+6. STRUCTURAL AND BUILDING ELEMENTS
+----------------------------------------
+
+IFCCOLUMN (32 elements)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  [1] Name: 210_Прямоугольного сечения (НесКол_2ур):1500 x 400 мм B30 F150:3434336, Tag: 3434336
+  [2] Name: 210_Прямоугольного сечения (НесКол_2ур):1500 x 400 мм B30 F150:3434413, Tag: 3434413
+  [3] Name: 210_Прямоугольного сечения (НесКол_2ур):1500 x 400 мм B30 F150:3434829, Tag: 3434829
+  [4] Name: 210_Прямоугольного сечения (НесКол_2ур):1500 x 400 мм B30 F150:3435083, Tag: 3435083
+  [5] Name: 210_Прямоугольного сечения (НесКол_2ур):1500 x 400 мм B30 F150:3435098, Tag: 3435098
+  [6] Name: 210_Прямоугольного сечения (НесКол_2ур):1200 x 400 мм B30 F150:3436176, Tag: 3436176
+  [7] Name: 210_Прямоугольного сечения (НесКол_2ур):1200 x 400 мм B30 F150:3436193, Tag: 3436193
+  [8] Name: 210_Прямоугольного сечения (НесКол_2ур):1200 x 400 мм B30 F150:3436210, Tag: 3436210
+  [9] Name: 210_Прямоугольного сечения (НесКол_2ур):1200 x 400 мм B30 F150:3436364, Tag: 3436364
+  [10] Name: 210_Прямоугольного сечения (НесКол_2ур):1200 x 400 мм B30 F150:3436379, Tag: 3436379
+  [11] Name: 210_Прямоугольного сечения (НесКол_2ур):1200 x 400 мм B30 F150:3436394, Tag: 3436394
+  [12] Name: 210_Прямоугольного сечения (НесКол_2ур):1200 x 400 мм B30 F150:3436409, Tag: 3436409
+  [13] Name: 210_Прямоугольного сечения (НесКол_2ур):1500 x 400 мм B30 F150:3462107, Tag: 3462107
+  [14] Name: 210_Прямоугольного сечения (НесКол_2ур):1500 x 400 мм B30 F150:3462135, Tag: 3462135
+  [15] Name: 210_Прямоугольного сечения (НесКол_2ур):1500 x 400 мм B30 F150:3462224, Tag: 3462224
+  [16] Name: 210_Прямоугольного сечения (НесКол_2ур):1500 x 400 мм B30 F150:3462241, Tag: 3462241
+  [17] Name: 210_Прямоугольного сечения (НесКол_2ур):1200 x 400 мм B30 F150:3511167, Tag: 3511167
+  [18] Name: 210_Прямоугольного сечения (НесКол_2ур):1500 x 400 мм B30 F150:3511201, Tag: 3511201
+  [19] Name: 210_Прямоугольного сечения (НесКол_2ур):1500 x 400 мм B30 F150:4196798, Tag: 4196798
+  [20] Name: 210_Прямоугольного сечения (НесКол_2ур):1500 x 400 мм B30 F150:4196852, Tag: 4196852
+  ... and 12 more IfcColumn elements
+
+IFCSLAB (125 elements)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  [1] Name: Перекрытие:Цементно-песчаная стяжка + гидроизоляция:3146879, Tag: 3146879
+  [2] Name: Перекрытие:Цементно-песчаная стяжка + гидроизоляция:3149596, Tag: 3149596
+  [3] Name: Перекрытие:Подготовка ФП:3149690, Tag: 3149690
+  [4] Name: Перекрытие:Подготовка ФП:3465343, Tag: 3465343
+  [5] Name: Перекрытие:В25 200мм:3469321, Tag: 3469321
+  [6] Name: Перекрытие:В30 F150 400мм:3493485, Tag: 3493485
+  [7] Name: Перекрытие:В30 F150 400мм:3501725, Tag: 3501725
+  [8] Name: Перекрытие:В35 F150 1000мм:3518661, Tag: 3518661
+  [9] Name: Перекрытие:В35 F150 200мм:3522557, Tag: 3522557
+  [10] Name: Перекрытие:В35 F150 200мм:3522777, Tag: 3522777
+  [11] Name: Перекрытие:В35 F150 200мм:3523534, Tag: 3523534
+  [12] Name: Перекрытие:В35 F150 200мм:3523639, Tag: 3523639
+  [13] Name: Перепад ФП2:Перепад ФП (Бетон):3526593, Tag: 3526593
+  [14] Name: Перекрытие:В35 F150 200мм:3527499, Tag: 3527499
+  [15] Name: Перекрытие:В25 200мм:3552544, Tag: 3552544
+  [16] Name: Перекрытие:В35 F150 200мм:3565200, Tag: 3565200
+  [17] Name: Перекрытие:В35 F150 250мм:3575002, Tag: 3575002
+  [18] Name: Перекрытие:В35 F150 250мм:3578378, Tag: 3578378
+  [19] Name: Перекрытие:В35 F150 200мм:3580393, Tag: 3580393
+  [20] Name: Перекрытие:В35 F150 250мм:3581727, Tag: 3581727
+  ... and 105 more IfcSlab elements
+
+IFCWALL (1221 elements)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  [1] Name: Базовая стена:Пароизоляция + ут100мм + гидроизоляция:3209501, Tag: 3209501
+  [2] Name: Базовая стена:Пароизоляция + гидроизоляция:3212396, Tag: 3212396
+  [3] Name: Базовая стена:Пароизоляция + гидроизоляция:3213344, Tag: 3213344
+  [4] Name: Базовая стена:Пароизоляция + гидроизоляция:3213717, Tag: 3213717
+  [5] Name: Базовая стена:Пароизоляция + гидроизоляция:3214013, Tag: 3214013
+  [6] Name: Базовая стена:Пароизоляция + гидроизоляция:3215951, Tag: 3215951
+  [7] Name: Базовая стена:Пароизоляция + гидроизоляция:3216401, Tag: 3216401
+  [8] Name: Базовая стена:Пароизоляция + гидроизоляция:3217134, Tag: 3217134
+  [9] Name: Базовая стена:Пароизоляция + гидроизоляция:3217439, Tag: 3217439
+  [10] Name: Базовая стена:Пароизоляция + гидроизоляция:3217948, Tag: 3217948
+  [11] Name: Базовая стена:Пароизоляция + гидроизоляция:3218644, Tag: 3218644
+  [12] Name: Базовая стена:Пароизоляция + гидроизоляция:3219237, Tag: 3219237
+  [13] Name: Базовая стена:Пароизоляция + гидроизоляция:3219360, Tag: 3219360
+  [14] Name: Базовая стена:В30 W6 F150 300мм:3430531, Tag: 3430531
+  [15] Name: Базовая стена:В30 W6 F150 300мм:3431118, Tag: 3431118
+  [16] Name: Базовая стена:Пароизоляция + гидроизоляция:3432708, Tag: 3432708
+  [17] Name: Базовая стена:Пароизоляция + гидроизоляция:3432780, Tag: 3432780
+  [18] Name: Базовая стена:Пароизоляция + гидроизоляция:3432849, Tag: 3432849
+  [19] Name: Базовая стена:Пароизоляция + гидроизоляция:3433619, Tag: 3433619
+  [20] Name: Базовая стена:В30 F150 250мм:3436612, Tag: 3436612
+  ... and 1201 more IfcWall elements
+
+IFCSTAIR (50 elements)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  [1] Name: (GM)_Лестничный марш сборный_Промежуточный_150х300:10 ступеней:3626049, Tag: 3626049
+  [2] Name: (GM)_Лестничный марш сборный_Промежуточный_150х300:10 ступеней:3626050, Tag: 3626050
+  [3] Name: (GM)_Лестничный марш сборный_Промежуточный_150х300:10 ступеней:3631099, Tag: 3631099
+  [4] Name: (GM)_Лестничный марш сборный_Промежуточный_150х300:10 ступеней:3631100, Tag: 3631100
+  [5] Name: (GM)_Лестничный марш сборный_Промежуточный_150х300:10 ступеней:3631381, Tag: 3631381
+  [6] Name: (GM)_Лестничный марш сборный_Промежуточный_150х300:10 ступеней:3631382, Tag: 3631382
+  [7] Name: (GM)_Лестничный марш сборный_Промежуточный_150х300:10 ступеней:3631396, Tag: 3631396
+  [8] Name: (GM)_Лестничный марш сборный_Промежуточный_150х300:10 ступеней:3631397, Tag: 3631397
+  [9] Name: (GM)_Лестничный марш сборный_Промежуточный_150х300:10 ступеней:3631409, Tag: 3631409
+  [10] Name: (GM)_Лестничный марш сборный_Промежуточный_150х300:10 ступеней:3631410, Tag: 3631410
+  [11] Name: (GM)_Лестничный марш сборный_Промежуточный_150х300:10 ступеней:3900412, Tag: 3900412
+  [12] Name: (GM)_Лестничный марш сборный_Промежуточный_150х300:10 ступеней:3900413, Tag: 3900413
+  [13] Name: (GM)_Лестничный марш сборный_Промежуточный_150х300:10 ступеней:3900435, Tag: 3900435
+  [14] Name: (GM)_Лестничный марш сборный_Промежуточный_150х300:10 ступеней:3900436, Tag: 3900436
+  [15] Name: (GM)_Лестничный марш сборный_Промежуточный_150х300:10 ступеней:3900440, Tag: 3900440
+  [16] Name: (GM)_Лестничный марш сборный_Промежуточный_150х300:10 ступеней:3900441, Tag: 3900441
+  [17] Name: (GM)_Лестничный марш сборный_Промежуточный_150х300:10 ступеней:3900445, Tag: 3900445
+  [18] Name: (GM)_Лестничный марш сборный_Промежуточный_150х300:10 ступеней:3900446, Tag: 3900446
+  [19] Name: (GM)_Лестничный марш сборный_Промежуточный_150х300:10 ступеней:3900450, Tag: 3900450
+  [20] Name: (GM)_Лестничный марш сборный_Промежуточный_150х300:10 ступеней:3900451, Tag: 3900451
+  ... and 30 more IfcStair elements
+
+7. MATERIAL INFORMATION
+----------------------------------------
+Total Materials: 62
+  - 03_Раствор стяжка М100
+  - 30_Гидроизоляция мембрана Техноэласт ЭПП в 2 слоя
+  - 03_Раствор стяжка М100
+  - 03_Раствор стяжка М100
+  - 02_Бетон B10
+  - 02_Бетон B10
+  - 30_Гидроизоляция мембрана Planter standard
+  - 31_Утеплитель Полистирол CARBON PROF
+  - 30_Мастика приклеивающая
+  - 30_Праймер битумный
+  - 02_Бетон B30 W6 F150 Гравий
+  - 02_Бетон B35 W6 F150 Гранит
+  - 02_Бетон B10
+  - 02_Бетон B25 Гравий
+  - 02_Бетон B30 W6 F150 Гравий
+  - 02_Бетон B35 W6 F150 Гранит
+  - 02_Бетон B35 W6 F150 Гранит
+  - 02_Бетон B35 W6 F150 Гранит
+  - 02_Бетон B35 W6 F150 Гранит
+  - 02_Сборный ЖБ
+  - 30_Гидроизоляция мембрана Planter standard
+  - 30_Гидроизоляция мембрана Planter standard
+  - 02_Бетон B30 W6 F150 Гравий
+  - 02_Бетон B35 W6 F150 Гранит
+  - 02_Бетон B35 W6 F150 Гранит
+  - 02_Бетон B30 W6 F150 Гравий
+  - 30_Гидроизоляция мембрана Planter standard
+  - 30_Гидроизоляция мембрана Planter standard
+  - Полиэтиленовая пленка 200 мкр - 1 слой
+  - Минеральная вата 200кг/м3 t=100мм
+  ... and 32 more materials
+
+8. PROPERTY SETS
+----------------------------------------
+Total Property Sets: 13710
+  - Pset_SiteCommon: 
+  - Pset_EnvironmentalImpactIndicators: 
+  - Pset_ReinforcementBarPitchOfSlab: 
+  - Pset_SlabCommon: 
+  - Pset_ConcreteElementGeneral: 
+  - ExpCheck_Slab: 
+  - ExpCheck_SlabReinforcement: 
+  - ExpCheck_Slab: 
+  - ExpCheck_SlabReinforcement: 
+  - ExpCheck_MaterialConcrete: 
+  - Pset_EnvironmentalImpactIndicators: 
+  - Pset_ReinforcementBarPitchOfSlab: 
+  - Pset_SlabCommon: 
+  - Pset_EnvironmentalImpactIndicators: 
+  - Pset_ReinforcementBarPitchOfSlab: 
+  - Pset_SlabCommon: 
+  - Pset_ConcreteElementGeneral: 
+  - ExpCheck_Slab: 
+  - ExpCheck_SlabReinforcement: 
+  - ExpCheck_Slab: 
+  ... and 13690 more property sets
+
+9. QUANTITY SETS
+----------------------------------------
+Total Quantity Sets: 1868
+
+10. RELATIONSHIPS SUMMARY
+----------------------------------------
+IfcRelContainedInSpatialStructure: 23
+IfcRelAggregates: 3
+IfcRelDefinesByType: 340
+IfcRelDefinesByProperties: 14667
+IfcRelAssociatesMaterial: 1042
+
