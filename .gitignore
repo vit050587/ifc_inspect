@@ -1,6 +1,6 @@
 ```
 # Excel files
-*.xlsx
+#*.xlsx
 
 # Python compiled files
 *.pyc
