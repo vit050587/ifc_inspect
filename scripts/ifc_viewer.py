@@ -24,10 +24,11 @@ def convert_ifc_to_threejs_json(ifc_path, output_json_path):
         
         f = ifcopenshell.open(ifc_path)
         
-        # Use settings that include transformations
+        # Use settings that include transformations and all geometry
         settings = ifcopenshell.geom.settings()
         settings.set(settings.USE_WORLD_COORDS, True)  # Get world coordinates directly
         settings.set(settings.WELD_VERTICES, True)     # Weld vertices for proper shading
+        settings.set(settings.DISABLE_OPENING_SUBTRACTIONS, True)  # Include opening elements as visible geometry
         
         # Collect geometry data
         geometry_data = {
@@ -52,17 +53,20 @@ def convert_ifc_to_threejs_json(ifc_path, output_json_path):
         geometry_data['metadata']['buildings_count'] = len(buildings)
         geometry_data['metadata']['stories_count'] = len(stories)
         
-        # Process elements with geometry - limit to first 500 for performance
+        # Process elements with geometry - include all elements for complete visualization
         element_count = 0
         products = f.by_type("IfcProduct")
         geometry_data['metadata']['element_count'] = len(products)
         
         material_map = {}
         material_index = 0
-        max_elements = 50000  # Limit for web performance
+        неполный-отображение-элементов-здания-2e2da
+        max_elements = None  # No limit - load all elements for complete model visualization
+
         
         for product in products:
-            if element_count >= max_elements:
+            # Skip limit check if max_elements is None (load all elements)
+            if max_elements is not None and element_count >= max_elements:
                 break
                 
             if not hasattr(product, 'Representation') or not product.Representation:
@@ -101,6 +105,10 @@ def convert_ifc_to_threejs_json(ifc_path, output_json_path):
                         color = [0.5, 0.9, 0.9]
                     elif 'Stair' in elem_type:
                         color = [0.9, 0.7, 0.5]
+                    elif 'OpeningElement' in elem_type:
+                        color = [0.6, 0.6, 0.6]  # Gray for openings
+                    elif 'BuildingElementProxy' in elem_type:
+                        color = [0.85, 0.85, 0.75]  # Light yellow for proxies
                     else:
                         color = [0.75, 0.75, 0.85]
                     

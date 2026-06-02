@@ -1,4 +1,4 @@
-```
+
 # Python
 __pycache__/
 *.pyc
@@ -16,4 +16,4 @@ __pycache__/
 
 # Uploads (based on detected upload directory structure)
 #uploads/
-```
+
