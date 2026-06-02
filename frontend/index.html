@@ -503,7 +503,7 @@
         "imports": {
             "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
             "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
-            "web-ifc-three": "https://unpkg.com/web-ifc-three@0.0.127/index.js",
+            "web-ifc-three": "https://unpkg.com/web-ifc-three@0.0.126/IFCLoader.js",
             "web-ifc": "https://unpkg.com/web-ifc@0.0.56/web-ifc-api.js"
         }
     }
@@ -802,13 +802,8 @@
             try {
                 const ifcLoader = new IFCLoader();
                 
-                // Setup WASM with proper error handling and configuration
+                // Setup WASM path - must be called before loading
                 ifcLoader.ifcManager.setWasmPath('https://unpkg.com/web-ifc@0.0.56/');
-                
-                await ifcLoader.ifcManager.setupWasm().catch(err => {
-                    console.error('Failed to setup WASM:', err);
-                    throw new Error('WASM setup failed');
-                });
                 
                 // Load the IFC file from the backend
                 const ifcUrl = `/api/viewer/${sessionId}/${viewerInfo.filename}`;
