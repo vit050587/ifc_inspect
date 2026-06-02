@@ -1,12 +1,27 @@
 ```
-# Uploads directory
-#uploads/
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
 
-# Environment files
+# Uploads and generated files
+backend/uploads/
+
+# Environment
 .env
 .env.local
-.env.*
+*.env.*
 
 # Logs
 *.log
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
 ```
