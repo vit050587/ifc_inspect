@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from scripts.page_splitter import extract_pages_from_pdf
 from scripts.ifc_parser import parse_ifc_file
 from scripts.materials_summary import main as create_materials_summary
+from scripts.ifc_viewer import prepare_ifc_for_viewer
 
 app = Flask(__name__, static_folder='../frontend', static_url_path='')
 CORS(app)
@@ -112,10 +113,24 @@ def process_files():
             results['text_pages'].extend(text_pages)
             results['drawing_pages'].extend(drawing_pages)
     
-    # Process IFC files
+    # Process IFC files - FIRST prepare for viewer, THEN parse
     ifc_files = [os.path.join(session_folder, f) for f in session_info.get('ifc_files', [])]
+    ifc_viewer_info = []
+    
     for ifc_path in ifc_files:
         if os.path.exists(ifc_path):
+            # Step 1: Prepare IFC for viewer (runs first)
+            print(f"Preparing IFC for viewer: {ifc_path}")
+            try:
+                viewer_result = prepare_ifc_for_viewer(ifc_path, session_folder)
+                ifc_viewer_info.append(viewer_result)
+                session_info['ifc_viewer_info'] = ifc_viewer_info
+                print(f"✓ IFC ready for viewing: {viewer_result.get('filename', 'unknown')}")
+            except Exception as e:
+                print(f"Error preparing IFC viewer for {ifc_path}: {e}")
+                session_info['ifc_viewer_error'] = str(e)
+            
+            # Step 2: Parse IFC file (runs after viewer preparation)
             print(f"Processing IFC: {ifc_path}")
             try:
                 ifc_result = parse_ifc_file(ifc_path, session_folder)
@@ -160,6 +175,22 @@ def process_files():
         'materials_excel_file': session_info.get('materials_excel_file'),
         'summary': session_info['results_summary']
     })
+
+
+@app.route('/api/viewer/<session_id>/<filename>')
+def serve_ifc_viewer_file(session_id, filename):
+    """Serve IFC file for the web viewer"""
+    session_folder = os.path.join(UPLOAD_FOLDER, session_id)
+    viewer_folder = os.path.join(session_folder, 'viewer')
+    
+    if not os.path.exists(viewer_folder):
+        return jsonify({'error': 'Viewer folder not found'}), 404
+    
+    file_path = os.path.join(viewer_folder, filename)
+    if not os.path.exists(file_path):
+        return jsonify({'error': 'IFC file not found'}), 404
+    
+    return send_from_directory(viewer_folder, filename)
 
 
 @app.route('/api/download/<session_id>/<filename>')
