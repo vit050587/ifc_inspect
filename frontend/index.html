@@ -497,38 +497,26 @@
         </div>
     </div>
     
-    <!-- IFC Viewer Libraries - Using reliable CDN with fallbacks -->
+    <!-- IFC Viewer Libraries - Using reliable CDN -->
     <script type="importmap">
     {
         "imports": {
             "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
-            "web-ifc-three": "https://cdn.jsdelivr.net/npm/web-ifc-three@0.0.126/IFCLoader.js",
-            "web-ifc": "https://cdn.jsdelivr.net/npm/web-ifc@0.0.56/web-ifc-api.js"
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
         }
     }
     </script>
     <script type="module">
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-        import { IFCLoader } from 'web-ifc-three';
-        import * as WEBIFC from 'web-ifc';
         
         window.THREE = THREE;
         window.OrbitControls = OrbitControls;
-        window.IFCLoader = IFCLoader;
-        window.WEBIFC = WEBIFC;
-        
-        // Set WASM path explicitly
-        if (window.IFCLoader && window.IFCLoader.IFCManager) {
-            window.IFCLoader.IFCManager.setWasmPath('https://cdn.jsdelivr.net/npm/web-ifc@0.0.56/');
-        }
         
         // Signal that libraries are loaded
         window.viewerLibrariesLoaded = true;
         console.log('✓ Viewer libraries loaded successfully from CDN');
         console.log('  THREE version:', THREE.REVISION);
-        console.log('  IFCLoader:', !!window.IFCLoader);
         console.log('  OrbitControls:', !!window.OrbitControls);
         
         // Expose the init function globally
@@ -540,16 +528,14 @@
         // Fallback loader in case module fails
         window.checkViewerLibraries = function() {
             const hasThree = typeof window.THREE !== 'undefined';
-            const hasIFCLoader = typeof window.IFCLoader !== 'undefined';
             const hasOrbitControls = typeof window.OrbitControls !== 'undefined';
             
             console.log('Library check:', {
                 THREE: hasThree,
-                IFCLoader: hasIFCLoader,
                 OrbitControls: hasOrbitControls
             });
             
-            return hasThree && hasIFCLoader && hasOrbitControls;
+            return hasThree && hasOrbitControls;
         };
     </script>
     <script>
@@ -561,21 +547,29 @@
         // Wait for viewer libraries to load with better reliability
         function waitForViewerLibraries(timeout = 15000) {
             return new Promise((resolve, reject) => {
-                if (window.viewerLibrariesLoaded && window.THREE && window.IFCLoader) {
-                    console.log('Viewer libraries already loaded');
+                if (window.viewerLibrariesLoaded && window.THREE && window.OrbitControls) {
+                    console.log('✓ Viewer libraries already loaded');
+                    console.log('  THREE:', !!window.THREE);
+                    console.log('  OrbitControls:', !!window.OrbitControls);
                     resolve();
                     return;
                 }
                 
                 const startTime = Date.now();
                 const checkInterval = setInterval(() => {
-                    if (window.viewerLibrariesLoaded && window.THREE && window.IFCLoader) {
+                    if (window.viewerLibrariesLoaded && window.THREE && window.OrbitControls) {
                         clearInterval(checkInterval);
-                        console.log('Viewer libraries loaded after waiting');
+                        console.log('✓ Viewer libraries loaded after waiting');
                         resolve();
                     } else if (Date.now() - startTime > timeout) {
                         clearInterval(checkInterval);
-                        console.error('Viewer libraries timeout. THREE:', !!window.THREE, 'IFCLoader:', !!window.IFCLoader);
+                        const hasThree = !!window.THREE;
+                        const hasOrbitControls = !!window.OrbitControls;
+                        const hasViewerLoaded = !!window.viewerLibrariesLoaded;
+                        console.error('✗ Viewer libraries timeout!');
+                        console.error('  viewerLibrariesLoaded:', hasViewerLoaded);
+                        console.error('  THREE:', hasThree);
+                        console.error('  OrbitControls:', hasOrbitControls);
                         reject(new Error('Viewer libraries failed to load within timeout'));
                     }
                 }, 200);
@@ -765,12 +759,14 @@
             const infoGrid = document.getElementById('ifcViewerInfoGrid');
             
             // Wait for viewer libraries to be loaded
+            console.log('=== Starting IFC Viewer initialization ===');
             try {
                 await waitForViewerLibraries();
+                console.log('✓ Viewer libraries check passed');
             } catch (error) {
-                console.error('Failed to load viewer libraries:', error);
+                console.error('✗ Failed to load viewer libraries:', error);
                 viewerSection.style.display = 'block';
-                viewerContainer.innerHTML = '<div class="ifc-viewer-placeholder"><div class="icon">⚠️</div><p>Ошибка загрузки библиотек 3D просмотра</p></div>';
+                viewerContainer.innerHTML = '<div class="ifc-viewer-placeholder"><div class="icon">⚠️</div><p>Ошибка загрузки библиотек 3D просмотра</p><p style="font-size:12px;color:#95a5a6;margin-top:10px;">Проверьте консоль браузера (F12) для получения подробной информации</p></div>';
                 return;
             }
             
@@ -837,13 +833,24 @@
             async function loadGeometryJSON() {
                 try {
                     console.log('Loading geometry JSON from:', geometryJsonUrl);
+                    console.log('Session ID:', sessionId);
+                    console.log('Viewer Info filename:', viewerInfo.filename);
+                    
                     const response = await fetch(geometryJsonUrl);
-                    if (!response.ok) throw new Error('Geometry JSON not found');
+                    console.log('Geometry JSON response status:', response.status);
+                    
+                    if (!response.ok) {
+                        console.error('Geometry JSON not found, status:', response.status);
+                        throw new Error('Geometry JSON not found');
+                    }
                     
                     const geometryData = await response.json();
-                    console.log('Geometry JSON loaded:', geometryData.metadata);
+                    console.log('Geometry JSON loaded successfully!');
+                    console.log('Geometry JSON metadata:', geometryData.metadata);
+                    console.log('Has geometry:', geometryData.metadata.has_geometry);
+                    console.log('Mesh count:', geometryData.meshes ? geometryData.meshes.length : 0);
                     
-                    if (geometryData.metadata.has_geometry && geometryData.meshes.length > 0) {
+                    if (geometryData.metadata.has_geometry && geometryData.meshes && geometryData.meshes.length > 0) {
                         // Create materials
                         const materials = geometryData.materials.map(mat => {
                             return new THREE.MeshPhongMaterial({
@@ -898,11 +905,15 @@
                             const center = box.getCenter(new THREE.Vector3());
                             const size = box.getSize(new THREE.Vector3());
                             
+                            console.log('Model bounding box:', { center: center.toArray(), size: size.toArray() });
+                            
                             // Adjust camera based on model size
                             const maxDim = Math.max(size.x, size.y, size.z);
                             const fov = camera.fov * (Math.PI / 180);
                             let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
                             cameraZ *= 2.0;
+                            
+                            console.log('Setting camera position, maxDim:', maxDim, 'cameraZ:', cameraZ);
                             
                             camera.position.set(center.x + cameraZ/2, center.y + cameraZ/2, center.z + cameraZ/2);
                             camera.lookAt(center);
@@ -910,8 +921,19 @@
                             controls.update();
                             
                             scene.add(modelGroup);
-                            console.log(`Loaded ${meshCount} meshes from geometry JSON`);
+                            console.log(`✓ Loaded ${meshCount} meshes from geometry JSON`);
+                            
+                            // Start animation loop
+                            function animate() {
+                                requestAnimationFrame(animate);
+                                controls.update();
+                                renderer.render(scene, camera);
+                            }
+                            animate();
+                            
                             return true;
+                        } else {
+                            console.warn('No meshes were created from geometry data');
                         }
                     }
                     
@@ -923,50 +945,8 @@
             }
             
             async function loadWithWebIfcThree() {
-                return new Promise((resolve) => {
-                    try {
-                        const ifcLoader = new IFCLoader();
-                        ifcLoader.ifcManager.setWasmPath('https://unpkg.com/web-ifc@0.0.56/');
-                        
-                        const ifcUrl = `/api/viewer/${sessionId}/${viewerInfo.filename}`;
-                        console.log('Loading IFC with web-ifc-three from:', ifcUrl);
-                        
-                        ifcLoader.load(
-                            ifcUrl,
-                            (ifcModel) => {
-                                console.log('IFC model loaded successfully with web-ifc-three!');
-                                
-                                // Center the model
-                                const box = new THREE.Box3().setFromObject(ifcModel);
-                                const center = box.getCenter(new THREE.Vector3());
-                                const size = box.getSize(new THREE.Vector3());
-                                
-                                const maxDim = Math.max(size.x, size.y, size.z);
-                                const fov = camera.fov * (Math.PI / 180);
-                                let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
-                                cameraZ *= 2.0;
-                                
-                                camera.position.set(center.x + cameraZ/2, center.y + cameraZ/2, center.z + cameraZ/2);
-                                camera.lookAt(center);
-                                controls.target.copy(center);
-                                controls.update();
-                                
-                                scene.add(ifcModel);
-                                resolve(true);
-                            },
-                            (xhr) => {
-                                console.log(`IFC loading: ${(xhr.loaded / xhr.total * 100).toFixed(0)}%`);
-                            },
-                            (error) => {
-                                console.error('Error loading IFC with web-ifc-three:', error);
-                                resolve(false);
-                            }
-                        );
-                    } catch (error) {
-                        console.error('Error initializing web-ifc-three:', error);
-                        resolve(false);
-                    }
-                });
+                console.log('web-ifc-three not available, skipping direct IFC loading');
+                return false;
             }
             
             // Try loading methods in order
@@ -977,14 +957,8 @@
                     return;
                 }
                 
-                // Fall back to web-ifc-three
-                if (await loadWithWebIfcThree()) {
-                    console.log('Model loaded with web-ifc-three');
-                    return;
-                }
-                
-                // Final fallback: bounding box representation
-                console.log('Using fallback bounding box representation');
+                // web-ifc-three is not available, skip to fallback
+                console.log('Geometry JSON not available, using fallback representation');
                 createBoundingBoxRepresentation(scene, viewerInfo);
             })();
             
@@ -1081,13 +1055,14 @@
             
             // Fallback viewer function for when viewerInfo is invalid
             async function createFallbackViewer(container) {
-                console.log('Creating fallback viewer...');
+                console.log('=== Creating fallback viewer ===');
                 
                 // Wait for viewer libraries to be loaded
                 try {
                     await waitForViewerLibraries();
+                    console.log('✓ Viewer libraries check passed for fallback viewer');
                 } catch (error) {
-                    console.error('Failed to load viewer libraries:', error);
+                    console.error('✗ Failed to load viewer libraries:', error);
                     container.innerHTML = '<div class="ifc-viewer-placeholder"><div class="icon">⚠️</div><p>Ошибка загрузки библиотек 3D просмотра</p></div>';
                     return;
                 }
@@ -1182,16 +1157,8 @@
                     renderer.setSize(container.clientWidth, container.clientHeight);
                 });
                 
-                console.log('Fallback viewer created');
+                console.log('✓ Fallback viewer created successfully');
             }
-            
-            // Animation loop
-            function animate() {
-                requestAnimationFrame(animate);
-                controls.update();
-                renderer.render(scene, camera);
-            }
-            animate();
             
             // Handle window resize
             window.addEventListener('resize', () => {
@@ -1199,6 +1166,8 @@
                 camera.updateProjectionMatrix();
                 renderer.setSize(viewerContainer.clientWidth, viewerContainer.clientHeight);
             });
+            
+            console.log('IFC Viewer initialized successfully');
             
             // Display model info
             infoGrid.innerHTML = `
