@@ -1,6 +1,13 @@
+# Flask и расширения
 Flask==3.0.0
 flask-cors==4.0.0
+
+# Обработка PDF
 PyMuPDF==1.23.8
-ifcopenshell==0.7.16
+
+# IFC парсинг (версия 0.7.16 недоступна в pip, используется 0.8.5)
+ifcopenshell>=0.7.0
+
+# Excel генерация и работа с данными
 openpyxl>=3.1.5
-pandas==2.1.4
+pandas>=2.1.4
