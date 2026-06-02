@@ -1,6 +1,6 @@
 #!/bin/bash
-PROJECT_DIR="/workspace"
-VENV_DIR="/workspace/.venv"
+PROJECT_DIR="/home/kosinov.va/Projects/processing_schema/ifc_inspect"
+VENV_DIR="/home/kosinov.va/Projects/processing_schema/ifc_inspect.venv"
 
 cd "$PROJECT_DIR" || exit
 
