@@ -804,60 +804,165 @@
             pointLight.position.set(0, 10, 0);
             scene.add(pointLight);
             
-            // Load IFC file using web-ifc-three
+            // Load IFC file - Try geometry JSON first (faster), then fall back to web-ifc-three
             let modelLoaded = false;
             
-            try {
-                const ifcLoader = new IFCLoader();
-                
-                // Setup WASM path - must be called before loading
-                ifcLoader.ifcManager.setWasmPath('https://unpkg.com/web-ifc@0.0.56/');
-                
-                // Load the IFC file from the backend
-                const ifcUrl = `/api/viewer/${sessionId}/${viewerInfo.filename}`;
-                
-                console.log('Loading IFC from:', ifcUrl);
-                
-                ifcLoader.load(
-                    ifcUrl,
-                    (ifcModel) => {
-                        console.log('IFC model loaded successfully!');
-                        modelLoaded = true;
+            // Check if geometry JSON is available (created by IfcOpenShell)
+            const geometryJsonUrl = `/api/viewer/${sessionId}/${viewerInfo.filename.replace('.ifc', '_geometry.json')}`;
+            
+            async function loadGeometryJSON() {
+                try {
+                    console.log('Loading geometry JSON from:', geometryJsonUrl);
+                    const response = await fetch(geometryJsonUrl);
+                    if (!response.ok) throw new Error('Geometry JSON not found');
+                    
+                    const geometryData = await response.json();
+                    console.log('Geometry JSON loaded:', geometryData.metadata);
+                    
+                    if (geometryData.metadata.has_geometry && geometryData.meshes.length > 0) {
+                        // Create materials
+                        const materials = geometryData.materials.map(mat => {
+                            return new THREE.MeshPhongMaterial({
+                                color: new THREE.Color().fromArray(mat.color),
+                                transparent: true,
+                                opacity: 0.9,
+                                side: THREE.DoubleSide
+                            });
+                        });
                         
-                        // Center the model
-                        const box = new THREE.Box3().setFromObject(ifcModel);
-                        const center = box.getCenter(new THREE.Vector3());
-                        const size = box.getSize(new THREE.Vector3());
+                        if (materials.length === 0) {
+                            materials.push(new THREE.MeshPhongMaterial({ color: 0x3498db }));
+                        }
                         
-                        // Adjust camera based on model size
-                        const maxDim = Math.max(size.x, size.y, size.z);
-                        const fov = camera.fov * (Math.PI / 180);
-                        let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
-                        cameraZ *= 2.0; // Zoom out more
+                        // Create meshes from geometry data
+                        const modelGroup = new THREE.Group();
+                        let meshCount = 0;
                         
-                        camera.position.set(center.x + cameraZ/2, center.y + cameraZ/2, center.z + cameraZ/2);
-                        camera.lookAt(center);
-                        controls.target.copy(center);
-                        controls.update();
+                        for (const meshData of geometryData.meshes) {
+                            if (!meshData.vertices || !meshData.faces) continue;
+                            
+                            try {
+                                const geometry = new THREE.BufferGeometry();
+                                
+                                // Convert vertices to Float32Array
+                                const vertices = new Float32Array(meshData.vertices);
+                                geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+                                
+                                // Convert faces to indices (assuming triangles)
+                                const indices = new Uint32Array(meshData.faces);
+                                geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+                                
+                                // Compute normals for proper lighting
+                                geometry.computeVertexNormals();
+                                
+                                // Get material
+                                const materialIndex = meshData.materialIndex || 0;
+                                const material = materials[materialIndex] || materials[0];
+                                
+                                // Create mesh
+                                const mesh = new THREE.Mesh(geometry, material);
+                                modelGroup.add(mesh);
+                                meshCount++;
+                            } catch (e) {
+                                console.warn('Failed to create mesh:', e);
+                            }
+                        }
                         
-                        // Add model to scene
-                        scene.add(ifcModel);
-                        console.log('Model added to scene');
-                    },
-                    (xhr) => {
-                        console.log(`IFC loading: ${(xhr.loaded / xhr.total * 100).toFixed(0)}%`);
-                    },
-                    (error) => {
-                        console.error('Error loading IFC file:', error);
-                        // Fallback: show bounding box representation
-                        createBoundingBoxRepresentation(scene, viewerInfo);
+                        if (meshCount > 0) {
+                            // Center the model
+                            const box = new THREE.Box3().setFromObject(modelGroup);
+                            const center = box.getCenter(new THREE.Vector3());
+                            const size = box.getSize(new THREE.Vector3());
+                            
+                            // Adjust camera based on model size
+                            const maxDim = Math.max(size.x, size.y, size.z);
+                            const fov = camera.fov * (Math.PI / 180);
+                            let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+                            cameraZ *= 2.0;
+                            
+                            camera.position.set(center.x + cameraZ/2, center.y + cameraZ/2, center.z + cameraZ/2);
+                            camera.lookAt(center);
+                            controls.target.copy(center);
+                            controls.update();
+                            
+                            scene.add(modelGroup);
+                            console.log(`Loaded ${meshCount} meshes from geometry JSON`);
+                            return true;
+                        }
                     }
-                );
-            } catch (error) {
-                console.error('Error initializing IFC loader:', error);
-                // Fallback: show bounding box representation
-                createBoundingBoxRepresentation(scene, viewerInfo);
+                    
+                    return false;
+                } catch (error) {
+                    console.log('Geometry JSON not available or failed to load:', error.message);
+                    return false;
+                }
             }
+            
+            async function loadWithWebIfcThree() {
+                return new Promise((resolve) => {
+                    try {
+                        const ifcLoader = new IFCLoader();
+                        ifcLoader.ifcManager.setWasmPath('https://unpkg.com/web-ifc@0.0.56/');
+                        
+                        const ifcUrl = `/api/viewer/${sessionId}/${viewerInfo.filename}`;
+                        console.log('Loading IFC with web-ifc-three from:', ifcUrl);
+                        
+                        ifcLoader.load(
+                            ifcUrl,
+                            (ifcModel) => {
+                                console.log('IFC model loaded successfully with web-ifc-three!');
+                                
+                                // Center the model
+                                const box = new THREE.Box3().setFromObject(ifcModel);
+                                const center = box.getCenter(new THREE.Vector3());
+                                const size = box.getSize(new THREE.Vector3());
+                                
+                                const maxDim = Math.max(size.x, size.y, size.z);
+                                const fov = camera.fov * (Math.PI / 180);
+                                let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+                                cameraZ *= 2.0;
+                                
+                                camera.position.set(center.x + cameraZ/2, center.y + cameraZ/2, center.z + cameraZ/2);
+                                camera.lookAt(center);
+                                controls.target.copy(center);
+                                controls.update();
+                                
+                                scene.add(ifcModel);
+                                resolve(true);
+                            },
+                            (xhr) => {
+                                console.log(`IFC loading: ${(xhr.loaded / xhr.total * 100).toFixed(0)}%`);
+                            },
+                            (error) => {
+                                console.error('Error loading IFC with web-ifc-three:', error);
+                                resolve(false);
+                            }
+                        );
+                    } catch (error) {
+                        console.error('Error initializing web-ifc-three:', error);
+                        resolve(false);
+                    }
+                });
+            }
+            
+            // Try loading methods in order
+            (async () => {
+                // First try geometry JSON (fastest, created by IfcOpenShell)
+                if (await loadGeometryJSON()) {
+                    console.log('Model loaded from geometry JSON');
+                    return;
+                }
+                
+                // Fall back to web-ifc-three
+                if (await loadWithWebIfcThree()) {
+                    console.log('Model loaded with web-ifc-three');
+                    return;
+                }
+                
+                // Final fallback: bounding box representation
+                console.log('Using fallback bounding box representation');
+                createBoundingBoxRepresentation(scene, viewerInfo);
+            })();
             
             // Helper function to create a simple representation if IFC fails to load
             function createBoundingBoxRepresentation(scene, info) {
