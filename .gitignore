@@ -1,6 +1,6 @@
 ```
 # Uploads directory
-uploads/
+#uploads/
 
 # Environment files
 .env
