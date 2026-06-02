@@ -243,7 +243,9 @@ def get_ifc_info(ifc_path):
                 'area': None,
                 'material': 'N/A',
                 'layer': 'N/A',
-                'properties': {}
+                'properties': {},
+                'opening_volumes': 0.0,  # Суммарный объем проемов в элементе
+                'opening_areas': 0.0     # Суммарная площадь проемов в элементе
             }
             
             # Get placement/elevation
@@ -381,6 +383,107 @@ def get_ifc_info(ifc_path):
             
             elements_by_type[elem_type].append(elem_data)
     
+    # Process openings and associate them with parent elements (walls, slabs, etc.)
+    # Create a mapping of element IDs to their data for quick lookup
+    element_id_map = {}
+    for elem_type, elems in elements_by_type.items():
+        for elem_data in elems:
+            element_id_map[elem_data['id']] = elem_data
+    
+    # Process all openings
+    openings = f.by_type("IfcOpeningElement")
+    for opening in openings:
+        opening_data = {
+            'id': opening.id(),
+            'name': getattr(opening, 'Name', 'N/A') or 'N/A',
+            'tag': getattr(opening, 'Tag', 'N/A') or 'N/A',
+            'description': getattr(opening, 'Description', 'N/A') or 'N/A',
+            'type': 'IfcOpeningElement',
+            'volume': None,
+            'area': None,
+            'dimensions': {},
+            'parent_element_id': None,
+            'material': 'N/A',
+            'layer': 'N/A',
+            'properties': {},
+            'opening_volumes': 0.0,
+            'opening_areas': 0.0
+        }
+        
+        # Get quantities from opening
+        if hasattr(opening, 'IsDefinedBy'):
+            for rel in opening.IsDefinedBy or []:
+                if hasattr(rel, 'RelatingPropertyDefinition'):
+                    prop_def = rel.RelatingPropertyDefinition
+                    if prop_def.is_a("IfcElementQuantity"):
+                        if hasattr(prop_def, 'Quantities'):
+                            for qty in prop_def.Quantities or []:
+                                if qty.is_a("IfcPhysicalSimpleQuantity"):
+                                    qty_name = getattr(qty, 'Name', '')
+                                    qty_value = None
+                                    if hasattr(qty, 'NominalValue') and qty.NominalValue:
+                                        qty_value = qty.NominalValue.wrappedValue if hasattr(qty.NominalValue, 'wrappedValue') else None
+                                    elif hasattr(qty, 'LengthValue') and qty.LengthValue:
+                                        qty_value = qty.LengthValue.wrappedValue if hasattr(qty.LengthValue, 'wrappedValue') else qty.LengthValue
+                                    elif hasattr(qty, 'AreaValue') and qty.AreaValue:
+                                        qty_value = qty.AreaValue.wrappedValue if hasattr(qty.AreaValue, 'wrappedValue') else qty.AreaValue
+                                    elif hasattr(qty, 'VolumeValue') and qty.VolumeValue:
+                                        qty_value = qty.VolumeValue.wrappedValue if hasattr(qty.VolumeValue, 'wrappedValue') else qty.VolumeValue
+                                    
+                                    if qty_name in ['Length', 'Width', 'Height', 'Depth'] and qty_value is not None:
+                                        opening_data['dimensions'][qty_name] = qty_value * length_unit
+                                    elif qty_name == 'NetVolume':
+                                        opening_data['volume'] = qty_value
+                                    elif qty_name == 'NetArea':
+                                        opening_data['area'] = qty_value
+                    elif prop_def.is_a("IfcPropertySet"):
+                        if hasattr(prop_def, 'HasProperties'):
+                            for prop in prop_def.HasProperties or []:
+                                if prop.is_a("IfcPropertySingleValue"):
+                                    prop_name = getattr(prop, 'Name', 'N/A')
+                                    prop_value = 'N/A'
+                                    if hasattr(prop, 'NominalValue') and prop.NominalValue:
+                                        if hasattr(prop.NominalValue, 'wrappedValue'):
+                                            prop_value = prop.NominalValue.wrappedValue
+                                        else:
+                                            prop_value = str(prop.NominalValue)
+                                    opening_data['properties'][prop_name] = prop_value
+        
+        # Calculate volume and area from dimensions if not provided directly
+        # Dimensions in IFC are typically in model units (mm), already converted above
+        if opening_data['volume'] is None:
+            width = opening_data['dimensions'].get('Width', 0)
+            height = opening_data['dimensions'].get('Height', 0)
+            depth = opening_data['dimensions'].get('Depth', 0)
+            
+            # If we have all three dimensions, calculate volume
+            if width > 0 and height > 0 and depth > 0:
+                opening_data['volume'] = width * height * depth
+            # If we have Width and Height but no Depth, calculate area
+            elif width > 0 and height > 0:
+                opening_data['area'] = width * height
+        
+        # Find the parent element (wall/slab/etc.) that this opening belongs to
+        if hasattr(opening, 'VoidsElements') and opening.VoidsElements:
+            for rel in opening.VoidsElements:
+                parent_elem = rel.RelatingBuildingElement
+                parent_id = parent_elem.id()
+                
+                if parent_id in element_id_map:
+                    opening_data['parent_element_id'] = parent_id
+                    parent_data = element_id_map[parent_id]
+                    
+                    # Add opening volume/area to parent element's opening totals
+                    if opening_data['volume'] is not None and opening_data['volume'] > 0:
+                        parent_data['opening_volumes'] += opening_data['volume']
+                    if opening_data['area'] is not None and opening_data['area'] > 0:
+                        parent_data['opening_areas'] += opening_data['area']
+        
+        # Store opening data in elements_by_type for IfcOpeningElement
+        if 'IfcOpeningElement' not in elements_by_type:
+            elements_by_type['IfcOpeningElement'] = []
+        elements_by_type['IfcOpeningElement'].append(opening_data)
+    
     # Count unique property sets and definitions more accurately
     all_property_sets = f.by_type("IfcPropertySet")
     property_sets_count = len(all_property_sets)
@@ -510,7 +613,14 @@ def generate_excel_report(data, output_path):
             ws.cell(row=row_idx, column=4, value=elem['description'])
             ws.cell(row=row_idx, column=5, value=elem['material'])
             ws.cell(row=row_idx, column=6, value=elem['layer'])
-            ws.cell(row=row_idx, column=7, value=round(elem['volume'], 3) if elem['volume'] else None)
+            
+            # For walls/slabs/columns etc., calculate net volume (subtracting openings)
+            volume = elem['volume']
+            if volume is not None and elem.get('opening_volumes', 0) > 0:
+                # Net volume = gross volume - opening volumes
+                volume = volume - elem['opening_volumes']
+            
+            ws.cell(row=row_idx, column=7, value=round(volume, 3) if volume else None)
             ws.cell(row=row_idx, column=8, value=round(elem['area'], 3) if elem['area'] else None)
             ws.cell(row=row_idx, column=9, value=round(elem['dimensions'].get('Length', 0), 3) if 'Length' in elem['dimensions'] else None)
             ws.cell(row=row_idx, column=10, value=round(elem['dimensions'].get('Width', 0), 3) if 'Width' in elem['dimensions'] else None)
