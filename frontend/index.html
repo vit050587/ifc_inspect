@@ -516,12 +516,36 @@
         window.THREE = THREE;
         window.OrbitControls = OrbitControls;
         window.IFCLoader = IFCLoader;
+        
+        // Signal that libraries are loaded
+        window.viewerLibrariesLoaded = true;
     </script>
     <script>
         let sessionId = null;
         let selectedFiles = [];
         let ifcExcelFile = null;
         let ifcViewerInfo = null;
+        
+        // Wait for viewer libraries to load
+        function waitForViewerLibraries(timeout = 10000) {
+            return new Promise((resolve, reject) => {
+                if (window.viewerLibrariesLoaded) {
+                    resolve();
+                    return;
+                }
+                
+                const startTime = Date.now();
+                const checkInterval = setInterval(() => {
+                    if (window.viewerLibrariesLoaded) {
+                        clearInterval(checkInterval);
+                        resolve();
+                    } else if (Date.now() - startTime > timeout) {
+                        clearInterval(checkInterval);
+                        reject(new Error('Viewer libraries failed to load'));
+                    }
+                }, 100);
+            });
+        }
         
         // File upload handling
         const dropZone = document.getElementById('dropZone');
@@ -705,10 +729,21 @@
             const viewerInfoDiv = document.getElementById('ifcViewerInfo');
             const infoGrid = document.getElementById('ifcViewerInfoGrid');
             
+            // Wait for viewer libraries to be loaded
+            try {
+                await waitForViewerLibraries();
+            } catch (error) {
+                console.error('Failed to load viewer libraries:', error);
+                viewerSection.style.display = 'block';
+                viewerContainer.innerHTML = '<div class="ifc-viewer-placeholder"><div class="icon">⚠️</div><p>Ошибка загрузки библиотек 3D просмотра</p></div>';
+                return;
+            }
+            
             if (!viewerInfo || !viewerInfo.valid) {
                 console.warn('IFC viewer info not available or invalid');
                 // Show fallback even if viewerInfo is invalid
                 createFallbackViewer(viewerContainer);
+                viewerSection.style.display = 'block';
                 return;
             }
             
@@ -907,8 +942,17 @@
             }
             
             // Fallback viewer function for when viewerInfo is invalid
-            function createFallbackViewer(container) {
+            async function createFallbackViewer(container) {
                 console.log('Creating fallback viewer...');
+                
+                // Wait for viewer libraries to be loaded
+                try {
+                    await waitForViewerLibraries();
+                } catch (error) {
+                    console.error('Failed to load viewer libraries:', error);
+                    container.innerHTML = '<div class="ifc-viewer-placeholder"><div class="icon">⚠️</div><p>Ошибка загрузки библиотек 3D просмотра</p></div>';
+                    return;
+                }
                 
                 container.innerHTML = '';
                 
