@@ -126,6 +126,76 @@ def get_ifc_info(ifc_path):
         "IfcDoor", "IfcBuildingElementProxy"
     ]
     
+    # Also get element types for type-level properties
+    element_type_map = {
+        "IfcWall": "IfcWallType",
+        "IfcSlab": "IfcSlabType",
+        "IfcColumn": "IfcColumnType",
+        "IfcBeam": "IfcBeamType",
+        "IfcStair": "IfcStairType",
+        "IfcRailing": "IfcRailingType",
+        "IfcRoof": "IfcRoofType",
+        "IfcPlate": "IfcPlateType",
+        "IfcMember": "IfcMemberType",
+        "IfcFooting": "IfcFootingType",
+        "IfcPile": "IfcPileType",
+        "IfcCurtainWall": "IfcCurtainWallType",
+        "IfcWindow": "IfcWindowType",
+        "IfcDoor": "IfcDoorType",
+        "IfcBuildingElementProxy": "IfcBuildingElementProxyType"
+    }
+    
+    # Cache for type-level properties
+    type_properties_cache = {}
+    
+    # First pass: collect all type-level properties
+    for elem_type, type_name in element_type_map.items():
+        types = f.by_type(type_name)
+        for elem_type_obj in types:
+            type_id = elem_type_obj.id()
+            type_props = {}
+            
+            # Get property sets from type
+            if hasattr(elem_type_obj, 'HasPropertySets'):
+                for prop_set in elem_type_obj.HasPropertySets or []:
+                    if prop_set.is_a("IfcPropertySet"):
+                        if hasattr(prop_set, 'HasProperties'):
+                            for prop in prop_set.HasProperties or []:
+                                if prop.is_a("IfcPropertySingleValue"):
+                                    prop_name = getattr(prop, 'Name', '')
+                                    if prop_name:
+                                        prop_value = 'N/A'
+                                        if hasattr(prop, 'NominalValue') and prop.NominalValue:
+                                            if hasattr(prop.NominalValue, 'wrappedValue'):
+                                                prop_value = prop.NominalValue.wrappedValue
+                                            else:
+                                                prop_value = str(prop.NominalValue)
+                                        type_props[prop_name] = prop_value
+            
+            # Get quantities from type
+            if hasattr(elem_type_obj, 'HasPropertySets'):
+                for prop_set in elem_type_obj.HasPropertySets or []:
+                    if prop_set.is_a("IfcElementQuantity"):
+                        if hasattr(prop_set, 'Quantities'):
+                            for qty in prop_set.Quantities or []:
+                                if qty.is_a("IfcPhysicalSimpleQuantity"):
+                                    qty_name = getattr(qty, 'Name', '')
+                                    qty_value = None
+                                    if hasattr(qty, 'NominalValue') and qty.NominalValue:
+                                        qty_value = qty.NominalValue.wrappedValue if hasattr(qty.NominalValue, 'wrappedValue') else None
+                                    elif hasattr(qty, 'LengthValue') and qty.LengthValue:
+                                        qty_value = qty.LengthValue.wrappedValue if hasattr(qty.LengthValue, 'wrappedValue') else qty.LengthValue
+                                    elif hasattr(qty, 'AreaValue') and qty.AreaValue:
+                                        qty_value = qty.AreaValue.wrappedValue if hasattr(qty.AreaValue, 'wrappedValue') else qty.AreaValue
+                                    elif hasattr(qty, 'VolumeValue') and qty.VolumeValue:
+                                        qty_value = qty.VolumeValue.wrappedValue if hasattr(qty.VolumeValue, 'wrappedValue') else qty.VolumeValue
+                                    
+                                    if qty_name and qty_value is not None:
+                                        type_props[qty_name] = qty_value
+            
+            if type_props:
+                type_properties_cache[type_id] = type_props
+    
     # Unit conversion setup
     unit_context = None
     length_unit = 1.0  # meters by default
@@ -228,6 +298,27 @@ def get_ifc_info(ifc_path):
                                             else:
                                                 prop_value = str(prop.NominalValue)
                                         elem_data['properties'][prop_name] = prop_value
+            
+            # Get type-level properties via IsTypedBy relationship
+            if hasattr(elem, 'IsTypedBy'):
+                for rel in elem.IsTypedBy or []:
+                    if hasattr(rel, 'RelatingType'):
+                        type_obj = rel.RelatingType
+                        type_id = type_obj.id()
+                        
+                        # Merge cached type properties
+                        if type_id in type_properties_cache:
+                            for prop_name, prop_value in type_properties_cache[type_id].items():
+                                # Instance properties take precedence over type properties
+                                if prop_name not in elem_data['properties']:
+                                    elem_data['properties'][prop_name] = prop_value
+                        
+                        # Also get material from type if not found yet
+                        if elem_data['material'] == 'N/A':
+                            type_material = ifcopenshell.util.element.get_material(type_obj)
+                            if type_material and type_material.is_a("IfcMaterial"):
+                                elem_data['material'] = getattr(type_material, 'Name', 'N/A') or 'N/A'
+                                materials.add(elem_data['material'])
             
             # Get material
             mat_assoc = ifcopenshell.util.element.get_material(elem)
@@ -365,6 +456,15 @@ def generate_excel_report(data, output_path):
     ws_summary.column_dimensions['A'].width = 35
     ws_summary.column_dimensions['B'].width = 25
     
+    # Collect all unique property keys across all elements for dynamic columns
+    all_property_keys = set()
+    for elem_type, elems in data['elements_by_type'].items():
+        for elem in elems:
+            all_property_keys.update(elem['properties'].keys())
+    
+    # Sort property keys for consistent column order
+    sorted_property_keys = sorted(all_property_keys)
+    
     # Create sheets for each element type
     type_names_rus = {
         "IfcWall": "Стены",
@@ -386,12 +486,14 @@ def generate_excel_report(data, output_path):
         sheet_name = sheet_name[:31]
         ws = wb.create_sheet(title=sheet_name)
         
-        # Headers
+        # Headers - base columns + dynamic property columns
         headers = [
             "ID", "Имя", "Тег", "Описание", "Материал", "Слой/Толщина",
             "Объем (м³)", "Площадь (м²)", "Длина (м)", "Ширина (м)",
-            "Высота (м)", "Z-координата (м)", "Доп. свойства"
+            "Высота (м)", "Z-координата (м)"
         ]
+        # Add individual property columns
+        headers.extend(sorted_property_keys)
         
         for col, header in enumerate(headers, 1):
             cell = ws.cell(row=1, column=col, value=header)
@@ -415,9 +517,10 @@ def generate_excel_report(data, output_path):
             ws.cell(row=row_idx, column=11, value=round(elem['dimensions'].get('Height', 0), 3) if 'Height' in elem['dimensions'] else None)
             ws.cell(row=row_idx, column=12, value=round(elem.get('z_coordinate', 0), 3) if elem.get('z_coordinate') else None)
             
-            # Properties as string
-            props_str = '; '.join([f"{k}={v}" for k, v in elem['properties'].items()])
-            ws.cell(row=row_idx, column=13, value=props_str[:32000] if props_str else None)  # Excel limit
+            # Fill individual property columns
+            for col_idx, prop_key in enumerate(sorted_property_keys, 13):
+                prop_value = elem['properties'].get(prop_key, None)
+                ws.cell(row=row_idx, column=col_idx, value=prop_value)
             
             # Apply border to all cells in row
             for col in range(1, len(headers) + 1):
