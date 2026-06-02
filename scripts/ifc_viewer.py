@@ -1,53 +1,21 @@
 """
 IFC Viewer Script - Prepares IFC file for web visualization
 This script runs first to enable 3D viewing of the IFC model in the browser
-Uses IfcOpenShell to convert IFC to glTF for reliable web viewing
+Uses IfcOpenShell to extract geometry data for BIMSurfer/Three.js viewer
 """
 
 import os
 import json
 import shutil
+import struct
 import tempfile
 
 
-def convert_ifc_to_gltf(ifc_path, output_gltf_path):
+def convert_ifc_to_threejs_json(ifc_path, output_json_path):
     """
-    Convert IFC file to glTF format using IfcOpenShell.
-    This provides better compatibility with Three.js viewer.
-    """
-    try:
-        import ifcopenshell
-        import ifcopenshell.convert
-        
-        # Create converter settings
-        settings = ifcopenshell.geom.settings()
-        settings.set(settings.USE_PYTHON_OPENCASCADE, True)
-        settings.set(settings.INCLUDE_CURVES, True)
-        settings.set(settings.EXCLUDE_SOLIDS_AND_SURFACES, False)
-        
-        # Convert IFC to glTF
-        print(f"Converting {ifc_path} to glTF...")
-        
-        # Open IFC file
-        ifc_file = ifcopenshell.open(ifc_path)
-        
-        # Use ifcconvert-like functionality
-        # Export to OBJ first as intermediate format, then we'll use it
-        # Actually, let's use a simpler approach - export geometry info
-        
-        # For web viewing, we'll create a simplified JSON representation
-        # that Three.js can load directly
-        return convert_ifc_to_json(ifc_path, output_gltf_path.replace('.gltf', '.json'))
-        
-    except Exception as e:
-        print(f"Error converting IFC to glTF: {e}")
-        return None
-
-
-def convert_ifc_to_json(ifc_path, output_json_path):
-    """
-    Convert IFC file to a simplified JSON format for Three.js viewer.
-    Extracts basic geometry and material information.
+    Convert IFC file to Three.js compatible JSON format using IfcOpenShell.
+    Extracts geometry as vertices and faces for direct rendering.
+    Falls back to mesh-less mode if geometry extraction fails.
     """
     try:
         import ifcopenshell
@@ -55,10 +23,8 @@ def convert_ifc_to_json(ifc_path, output_json_path):
         
         f = ifcopenshell.open(ifc_path)
         
-        # Settings for geometry conversion
+        # Use simple settings without OpenCASCADE (faster, works without pythonocc)
         settings = ifcopenshell.geom.settings()
-        settings.set(settings.USE_PYTHON_OPENCASCADE, True)
-        settings.set(settings.INCLUDE_CURVES, True)
         
         # Collect geometry data
         geometry_data = {
@@ -66,9 +32,11 @@ def convert_ifc_to_json(ifc_path, output_json_path):
                 'project_name': '',
                 'element_count': 0,
                 'buildings_count': 0,
-                'stories_count': 0
+                'stories_count': 0,
+                'has_geometry': False
             },
-            'elements': []
+            'materials': [],
+            'meshes': []
         }
         
         # Get project info
@@ -81,53 +49,109 @@ def convert_ifc_to_json(ifc_path, output_json_path):
         geometry_data['metadata']['buildings_count'] = len(buildings)
         geometry_data['metadata']['stories_count'] = len(stories)
         
-        # Process elements with geometry
+        # Process elements with geometry - limit to first 500 for performance
         element_count = 0
         products = f.by_type("IfcProduct")
         geometry_data['metadata']['element_count'] = len(products)
         
+        material_map = {}
+        material_index = 0
+        max_elements = 500  # Limit for web performance
+        
         for product in products:
+            if element_count >= max_elements:
+                break
+                
             if not hasattr(product, 'Representation') or not product.Representation:
                 continue
             
             try:
                 shape = ifcopenshell.geom.create_shape(settings, product)
                 
-                if shape:
-                    # Get geometry
-                    geometry = shape.geometry
-                    
-                    # Get bounding box
-                    bbox_min = geometry.bbox_bottom
-                    bbox_max = geometry.bbox_top
-                    
-                    element_info = {
-                        'type': product.is_a(),
-                        'id': product.id(),
-                        'name': getattr(product, 'Name', 'Unnamed'),
-                        'bbox': {
-                            'min': list(bbox_min),
-                            'max': list(bbox_max)
-                        }
-                    }
-                    
-                    geometry_data['elements'].append(element_info)
-                    element_count += 1
-                    
+                if not shape:
+                    continue
+                
+                geom = shape.geometry
+                vertices = geom.verts
+                faces = geom.faces
+                
+                if len(vertices) < 3 or len(faces) < 1:
+                    continue
+                
+                # Get or create material
+                mat_key = str(getattr(geom, 'material', 'default'))
+                if mat_key not in material_map:
+                    material_map[mat_key] = material_index
+                    color = [0.7, 0.7, 0.8]
+                    geometry_data['materials'].append({
+                        'name': mat_key,
+                        'color': color
+                    })
+                    material_index += 1
+                
+                mesh_data = {
+                    'type': product.is_a(),
+                    'name': getattr(product, 'Name', 'Unnamed'),
+                    'materialIndex': material_map[mat_key],
+                    'vertices': vertices,
+                    'faces': faces
+                }
+                
+                geometry_data['meshes'].append(mesh_data)
+                element_count += 1
+                geometry_data['metadata']['has_geometry'] = True
+                
             except Exception as e:
-                # Skip elements that can't be processed
                 continue
         
         # Save JSON data
         with open(output_json_path, 'w', encoding='utf-8') as out:
             json.dump(geometry_data, out, indent=2)
         
-        print(f"Created JSON representation with {element_count} elements")
+        has_geom = element_count > 0
+        print(f"Created Three.js JSON: {element_count}/{len(products)} elements with geometry ({'success' if has_geom else 'no geometry data'})")
         return output_json_path
         
     except Exception as e:
-        print(f"Error converting IFC to JSON: {e}")
-        return None
+        print(f"Error converting IFC to Three.js JSON: {e}")
+        # Create minimal metadata-only JSON as fallback
+        try:
+            import ifcopenshell
+            f = ifcopenshell.open(ifc_path)
+            
+            projects = f.by_type("IfcProject")
+            buildings = f.by_type("IfcBuilding")
+            stories = f.by_type("IfcBuildingStorey")
+            products = f.by_type("IfcProduct")
+            
+            fallback_data = {
+                'metadata': {
+                    'project_name': projects[0].Name if projects else "Unknown",
+                    'element_count': len(products),
+                    'buildings_count': len(buildings),
+                    'stories_count': len(stories),
+                    'has_geometry': False,
+                    'error': str(e)
+                },
+                'materials': [],
+                'meshes': []
+            }
+            
+            with open(output_json_path, 'w', encoding='utf-8') as out:
+                json.dump(fallback_data, out, indent=2)
+            
+            print(f"Created fallback metadata-only JSON")
+            return output_json_path
+        except:
+            return None
+
+
+def convert_ifc_to_json(ifc_path, output_json_path):
+    """
+    Convert IFC file to a simplified JSON format for Three.js viewer.
+    Wrapper for convert_ifc_to_threejs_json.
+    """
+    return convert_ifc_to_threejs_json(ifc_path, output_json_path)
 
 
 def prepare_ifc_for_viewer(ifc_path, session_folder):

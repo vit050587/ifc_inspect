@@ -178,9 +178,9 @@ def process_files():
     })
 
 
-@app.route('/api/viewer/<session_id>/<filename>')
+@app.route('/api/viewer/<session_id>/<path:filename>')
 def serve_ifc_viewer_file(session_id, filename):
-    """Serve IFC file for the web viewer"""
+    """Serve IFC or geometry JSON file for the web viewer"""
     session_folder = os.path.join(UPLOAD_FOLDER, session_id)
     viewer_folder = os.path.join(session_folder, 'viewer')
     
@@ -189,11 +189,18 @@ def serve_ifc_viewer_file(session_id, filename):
     
     file_path = os.path.join(viewer_folder, filename)
     if not os.path.exists(file_path):
-        return jsonify({'error': 'IFC file not found'}), 404
+        return jsonify({'error': 'File not found'}), 404
     
-    # Serve with proper MIME type for IFC files
-    response = send_from_directory(viewer_folder, filename, mimetype='application/x-step')
-    response.headers['Content-Type'] = 'application/x-step'
+    # Determine MIME type based on file extension
+    if filename.lower().endswith('.json'):
+        mimetype = 'application/json'
+    elif filename.lower().endswith('.ifc'):
+        mimetype = 'application/x-step'
+    else:
+        mimetype = 'application/octet-stream'
+    
+    response = send_from_directory(viewer_folder, filename, mimetype=mimetype)
+    response.headers['Content-Type'] = mimetype
     return response
 
 
