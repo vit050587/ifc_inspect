@@ -191,7 +191,10 @@ def serve_ifc_viewer_file(session_id, filename):
     if not os.path.exists(file_path):
         return jsonify({'error': 'IFC file not found'}), 404
     
-    return send_from_directory(viewer_folder, filename)
+    # Serve with proper MIME type for IFC files
+    response = send_from_directory(viewer_folder, filename, mimetype='application/x-step')
+    response.headers['Content-Type'] = 'application/x-step'
+    return response
 
 
 @app.route('/api/download/<session_id>/<filename>')
