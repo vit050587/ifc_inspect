@@ -11,5 +11,17 @@
     "text_pages_count": 0,
     "drawing_pages_count": 0,
     "ifc_processed": true
-  }
+  },
+  "ifc_viewer_info": [
+    {
+      "valid": true,
+      "project_name": "35-РЕН-ПИР",
+      "element_count": 3293,
+      "buildings_count": 1,
+      "stories_count": 23,
+      "schema": "IFC4",
+      "file_size": 14992838,
+      "filename": "К01_КР_П_R19.ifc"
+    }
+  ]
 }
