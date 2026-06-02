@@ -60,7 +60,9 @@ def convert_ifc_to_threejs_json(ifc_path, output_json_path):
         
         material_map = {}
         material_index = 0
+        неполный-отображение-элементов-здания-2e2da
         max_elements = None  # No limit - load all elements for complete model visualization
+
         
         for product in products:
             # Skip limit check if max_elements is None (load all elements)
