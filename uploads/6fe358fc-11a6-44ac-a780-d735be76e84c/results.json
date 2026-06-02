@@ -1,0 +1,29 @@
+{
+  "text_pages": [],
+  "drawing_pages": [],
+  "ifc_results": {
+    "success": true,
+    "excel_path": "uploads/6fe358fc-11a6-44ac-a780-d735be76e84c/ifc_report.xlsx",
+    "excel_filename": "ifc_report.xlsx",
+    "project_info": {
+      "name": "35-РЕН-ПИР",
+      "description": "N/A",
+      "phase": "19.2",
+      "long_name": "Жилой дом с инженерными сетями и благоустройством территории по адресу: г.Москва, район Перово, ул.1-я Владимирская, влд. 47, з/у 1 (Восточный административный округ)",
+      "creation_date": "08 November 2021 г.",
+      "schema": "IFC4",
+      "site_elevation": 154.1
+    },
+    "elements_count": {
+      "IfcWall": 1221,
+      "IfcSlab": 125,
+      "IfcColumn": 32,
+      "IfcStair": 50,
+      "IfcOpeningElement": 980,
+      "IfcBuildingElementProxy": 1291
+    },
+    "total_elements": 3699,
+    "materials_count": 47,
+    "stories_count": 23
+  }
+}
