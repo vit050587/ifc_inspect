@@ -522,6 +522,11 @@
         // Signal that libraries are loaded
         window.viewerLibrariesLoaded = true;
         console.log('Viewer libraries loaded successfully');
+        
+        // Expose the init function globally
+        window.initViewerLibraries = function() {
+            return Promise.resolve();
+        };
     </script>
     <script>
         let sessionId = null;
@@ -529,24 +534,27 @@
         let ifcExcelFile = null;
         let ifcViewerInfo = null;
         
-        // Wait for viewer libraries to load
-        function waitForViewerLibraries(timeout = 10000) {
+        // Wait for viewer libraries to load with better reliability
+        function waitForViewerLibraries(timeout = 15000) {
             return new Promise((resolve, reject) => {
-                if (window.viewerLibrariesLoaded) {
+                if (window.viewerLibrariesLoaded && window.THREE && window.IFCLoader) {
+                    console.log('Viewer libraries already loaded');
                     resolve();
                     return;
                 }
                 
                 const startTime = Date.now();
                 const checkInterval = setInterval(() => {
-                    if (window.viewerLibrariesLoaded) {
+                    if (window.viewerLibrariesLoaded && window.THREE && window.IFCLoader) {
                         clearInterval(checkInterval);
+                        console.log('Viewer libraries loaded after waiting');
                         resolve();
                     } else if (Date.now() - startTime > timeout) {
                         clearInterval(checkInterval);
-                        reject(new Error('Viewer libraries failed to load'));
+                        console.error('Viewer libraries timeout. THREE:', !!window.THREE, 'IFCLoader:', !!window.IFCLoader);
+                        reject(new Error('Viewer libraries failed to load within timeout'));
                     }
-                }, 100);
+                }, 200);
             });
         }
         
