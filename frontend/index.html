@@ -512,13 +512,16 @@
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { IFCLoader } from 'web-ifc-three';
+        import * as WEBIFC from 'web-ifc';
         
         window.THREE = THREE;
         window.OrbitControls = OrbitControls;
         window.IFCLoader = IFCLoader;
+        window.WEBIFC = WEBIFC;
         
         // Signal that libraries are loaded
         window.viewerLibrariesLoaded = true;
+        console.log('Viewer libraries loaded successfully');
     </script>
     <script>
         let sessionId = null;
@@ -799,7 +802,9 @@
             try {
                 const ifcLoader = new IFCLoader();
                 
-                // Setup WASM with proper error handling
+                // Setup WASM with proper error handling and configuration
+                ifcLoader.ifcManager.setWasmPath('https://unpkg.com/web-ifc@0.0.56/');
+                
                 await ifcLoader.ifcManager.setupWasm().catch(err => {
                     console.error('Failed to setup WASM:', err);
                     throw new Error('WASM setup failed');
@@ -834,6 +839,7 @@
                         
                         // Add model to scene
                         scene.add(ifcModel);
+                        console.log('Model added to scene');
                     },
                     (xhr) => {
                         console.log(`IFC loading: ${(xhr.loaded / xhr.total * 100).toFixed(0)}%`);

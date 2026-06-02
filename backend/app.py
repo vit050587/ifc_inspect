@@ -16,7 +16,8 @@ from scripts.ifc_viewer import prepare_ifc_for_viewer
 app = Flask(__name__, static_folder='../frontend', static_url_path='')
 CORS(app)
 
-UPLOAD_FOLDER = 'uploads'
+# Use absolute path for uploads folder
+UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 @app.route('/')
