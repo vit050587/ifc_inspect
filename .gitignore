@@ -5,10 +5,9 @@ __pycache__/
 *.pyo
 *.pyd
 
-# Uploads directory (contains session data, reports, and temporary files)
-#uploads/
-
-# Environment
+# Dependencies
+venv/
+.venv/
 .env
 .env.local
 *.env.*
@@ -16,8 +15,19 @@ __pycache__/
 # Logs
 *.log
 
-# Temporary files
+# Coverage
+.coverage
+coverage/
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
 *.tmp
-*.temp
-*~
+
+# OS
+.DS_Store
+Thumbs.db
 ```
