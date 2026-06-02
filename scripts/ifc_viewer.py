@@ -15,16 +15,19 @@ def convert_ifc_to_threejs_json(ifc_path, output_json_path):
     """
     Convert IFC file to Three.js compatible JSON format using IfcOpenShell.
     Extracts geometry as vertices and faces for direct rendering.
-    Falls back to mesh-less mode if geometry extraction fails.
+    Applies proper transformations to get global coordinates.
     """
     try:
         import ifcopenshell
         import ifcopenshell.geom
+        import numpy as np
         
         f = ifcopenshell.open(ifc_path)
         
-        # Use simple settings without OpenCASCADE (faster, works without pythonocc)
+        # Use settings that include transformations
         settings = ifcopenshell.geom.settings()
+        settings.set(settings.USE_WORLD_COORDS, True)  # Get world coordinates directly
+        settings.set(settings.WELD_VERTICES, True)     # Weld vertices for proper shading
         
         # Collect geometry data
         geometry_data = {
@@ -82,7 +85,25 @@ def convert_ifc_to_threejs_json(ifc_path, output_json_path):
                 mat_key = str(getattr(geom, 'material', 'default'))
                 if mat_key not in material_map:
                     material_map[mat_key] = material_index
-                    color = [0.7, 0.7, 0.8]
+                    # Generate different colors based on element type
+                    elem_type = product.is_a()
+                    if 'Wall' in elem_type:
+                        color = [0.8, 0.8, 0.8]
+                    elif 'Slab' in elem_type or 'Cover' in elem_type:
+                        color = [0.7, 0.7, 0.9]
+                    elif 'Column' in elem_type:
+                        color = [0.9, 0.7, 0.7]
+                    elif 'Beam' in elem_type:
+                        color = [0.7, 0.9, 0.7]
+                    elif 'Door' in elem_type:
+                        color = [0.9, 0.9, 0.5]
+                    elif 'Window' in elem_type:
+                        color = [0.5, 0.9, 0.9]
+                    elif 'Stair' in elem_type:
+                        color = [0.9, 0.7, 0.5]
+                    else:
+                        color = [0.75, 0.75, 0.85]
+                    
                     geometry_data['materials'].append({
                         'name': mat_key,
                         'color': color
@@ -92,6 +113,7 @@ def convert_ifc_to_threejs_json(ifc_path, output_json_path):
                 mesh_data = {
                     'type': product.is_a(),
                     'name': getattr(product, 'Name', 'Unnamed'),
+                    'global_id': getattr(product, 'GlobalId', ''),
                     'materialIndex': material_map[mat_key],
                     'vertices': vertices,
                     'faces': faces
@@ -102,6 +124,7 @@ def convert_ifc_to_threejs_json(ifc_path, output_json_path):
                 geometry_data['metadata']['has_geometry'] = True
                 
             except Exception as e:
+                print(f"  Skipping element {product.GlobalId if hasattr(product, 'GlobalId') else 'unknown'}: {e}")
                 continue
         
         # Save JSON data
@@ -110,6 +133,22 @@ def convert_ifc_to_threejs_json(ifc_path, output_json_path):
         
         has_geom = element_count > 0
         print(f"Created Three.js JSON: {element_count}/{len(products)} elements with geometry ({'success' if has_geom else 'no geometry data'})")
+        
+        # Calculate and print bounding box for debugging
+        if has_geom:
+            all_verts = []
+            for m in geometry_data['meshes']:
+                v = m['vertices']
+                for i in range(0, len(v), 3):
+                    if i+2 < len(v):
+                        all_verts.append((v[i], v[i+1], v[i+2]))
+            if all_verts:
+                xs = [p[0] for p in all_verts]
+                ys = [p[1] for p in all_verts]
+                zs = [p[2] for p in all_verts]
+                print(f"Bounding Box: X[{min(xs):.2f}..{max(xs):.2f}] Y[{min(ys):.2f}..{max(ys):.2f}] Z[{min(zs):.2f}..{max(zs):.2f}]")
+                print(f"Model Size: {max(xs)-min(xs):.2f} x {max(ys)-min(ys):.2f} x {max(zs)-min(zs):.2f} meters")
+        
         return output_json_path
         
     except Exception as e:
