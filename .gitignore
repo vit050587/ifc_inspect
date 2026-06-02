@@ -15,5 +15,5 @@ __pycache__/
 *.env.*
 
 # Uploads (based on detected upload directory structure)
-uploads/
+#uploads/
 ```
