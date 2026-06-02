@@ -707,6 +707,8 @@
             
             if (!viewerInfo || !viewerInfo.valid) {
                 console.warn('IFC viewer info not available or invalid');
+                // Show fallback even if viewerInfo is invalid
+                createFallbackViewer(viewerContainer);
                 return;
             }
             
@@ -727,7 +729,7 @@
             // Renderer
             const renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(viewerContainer.clientWidth, viewerContainer.clientHeight);
-            renderer.setClearColor(0x1a1a2e);
+            renderer.setClearColor(0x1a1a2e, 1);
             renderer.shadowMap.enabled = true;
             viewerContainer.appendChild(renderer.domElement);
             
@@ -739,32 +741,44 @@
             controls.minDistance = 5;
             controls.maxDistance = 500;
             
-            // Lighting
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            // Lighting - CRITICAL: Add lights BEFORE loading model
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
             scene.add(ambientLight);
             
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
             directionalLight.position.set(20, 30, 20);
             directionalLight.castShadow = true;
             scene.add(directionalLight);
             
-            const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
+            const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.6);
             directionalLight2.position.set(-20, 10, -20);
             scene.add(directionalLight2);
+            
+            const pointLight = new THREE.PointLight(0xffffff, 0.5);
+            pointLight.position.set(0, 10, 0);
+            scene.add(pointLight);
             
             // Load IFC file using web-ifc-three
             let modelLoaded = false;
             
             try {
                 const ifcLoader = new IFCLoader();
-                await ifcLoader.ifcManager.setupWasm();
+                
+                // Setup WASM with proper error handling
+                await ifcLoader.ifcManager.setupWasm().catch(err => {
+                    console.error('Failed to setup WASM:', err);
+                    throw new Error('WASM setup failed');
+                });
                 
                 // Load the IFC file from the backend
                 const ifcUrl = `/api/viewer/${sessionId}/${viewerInfo.filename}`;
                 
+                console.log('Loading IFC from:', ifcUrl);
+                
                 ifcLoader.load(
                     ifcUrl,
                     (ifcModel) => {
+                        console.log('IFC model loaded successfully!');
                         modelLoaded = true;
                         
                         // Center the model
@@ -776,7 +790,7 @@
                         const maxDim = Math.max(size.x, size.y, size.z);
                         const fov = camera.fov * (Math.PI / 180);
                         let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
-                        cameraZ *= 1.5; // Zoom out a bit
+                        cameraZ *= 2.0; // Zoom out more
                         
                         camera.position.set(center.x + cameraZ/2, center.y + cameraZ/2, center.z + cameraZ/2);
                         camera.lookAt(center);
@@ -785,8 +799,6 @@
                         
                         // Add model to scene
                         scene.add(ifcModel);
-                        
-                        console.log('IFC model loaded successfully');
                     },
                     (xhr) => {
                         console.log(`IFC loading: ${(xhr.loaded / xhr.total * 100).toFixed(0)}%`);
@@ -892,6 +904,103 @@
                 controls.update();
                 
                 console.log('Fallback model created with', storiesCount, 'stories');
+            }
+            
+            // Fallback viewer function for when viewerInfo is invalid
+            function createFallbackViewer(container) {
+                console.log('Creating fallback viewer...');
+                
+                container.innerHTML = '';
+                
+                // Scene setup
+                const scene = new THREE.Scene();
+                scene.background = new THREE.Color(0x1a1a2e);
+                
+                // Camera
+                const camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 10000);
+                camera.position.set(15, 15, 15);
+                camera.lookAt(0, 0, 0);
+                
+                // Renderer
+                const renderer = new THREE.WebGLRenderer({ antialias: true });
+                renderer.setSize(container.clientWidth, container.clientHeight);
+                renderer.setClearColor(0x1a1a2e, 1);
+                container.appendChild(renderer.domElement);
+                
+                // Controls
+                const controls = new OrbitControls(camera, renderer.domElement);
+                controls.enableDamping = true;
+                controls.dampingFactor = 0.05;
+                
+                // Lighting
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+                scene.add(ambientLight);
+                
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+                directionalLight.position.set(20, 30, 20);
+                scene.add(directionalLight);
+                
+                // Create simple house model
+                const houseGroup = new THREE.Group();
+                
+                const materials = [
+                    new THREE.MeshPhongMaterial({ color: 0x3498db }),
+                    new THREE.MeshPhongMaterial({ color: 0xe74c3c }),
+                    new THREE.MeshPhongMaterial({ color: 0x2ecc71 })
+                ];
+                
+                // Foundation
+                const foundation = new THREE.Mesh(new THREE.BoxGeometry(8, 1, 6), materials[0]);
+                foundation.position.y = 0.5;
+                houseGroup.add(foundation);
+                
+                // First floor
+                const floor1 = new THREE.Mesh(new THREE.BoxGeometry(7.5, 0.3, 5.5), materials[2]);
+                floor1.position.y = 1.5;
+                houseGroup.add(floor1);
+                
+                // Walls
+                const wallMat = materials[1];
+                const frontWall = new THREE.Mesh(new THREE.BoxGeometry(7.5, 2.5, 0.2), wallMat);
+                frontWall.position.set(0, 3, 2.7);
+                houseGroup.add(frontWall);
+                
+                const backWall = new THREE.Mesh(new THREE.BoxGeometry(7.5, 2.5, 0.2), wallMat);
+                backWall.position.set(0, 3, -2.7);
+                houseGroup.add(backWall);
+                
+                const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.2, 2.5, 5), wallMat);
+                leftWall.position.set(-3.7, 3, 0);
+                houseGroup.add(leftWall);
+                
+                const rightWall = new THREE.Mesh(new THREE.BoxGeometry(0.2, 2.5, 5), wallMat);
+                rightWall.position.set(3.7, 3, 0);
+                houseGroup.add(rightWall);
+                
+                // Roof
+                const roof = new THREE.Mesh(new THREE.ConeGeometry(5, 2, 4), new THREE.MeshPhongMaterial({ color: 0x8e44ad }));
+                roof.position.set(0, 5.5, 0);
+                roof.rotation.y = Math.PI / 4;
+                houseGroup.add(roof);
+                
+                scene.add(houseGroup);
+                
+                // Animation loop
+                function animate() {
+                    requestAnimationFrame(animate);
+                    controls.update();
+                    renderer.render(scene, camera);
+                }
+                animate();
+                
+                // Handle resize
+                window.addEventListener('resize', () => {
+                    camera.aspect = container.clientWidth / container.clientHeight;
+                    camera.updateProjectionMatrix();
+                    renderer.setSize(container.clientWidth, container.clientHeight);
+                });
+                
+                console.log('Fallback viewer created');
             }
             
             // Animation loop
