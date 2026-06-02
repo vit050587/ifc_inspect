@@ -497,8 +497,26 @@
         </div>
     </div>
     
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three-gltf-loader@0.0.1/index.min.js"></script>
+    <!-- IFC Viewer Libraries -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+            "web-ifc-three": "https://unpkg.com/web-ifc-three@0.0.127/index.js",
+            "web-ifc": "https://unpkg.com/web-ifc@0.0.56/web-ifc-api.js"
+        }
+    }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { IFCLoader } from 'web-ifc-three';
+        
+        window.THREE = THREE;
+        window.OrbitControls = OrbitControls;
+        window.IFCLoader = IFCLoader;
+    </script>
     <script>
         let sessionId = null;
         let selectedFiles = [];
@@ -681,7 +699,7 @@
             resultsSection.classList.add('active');
         }
         
-        function showIFCViewer(viewerInfo) {
+        async function showIFCViewer(viewerInfo) {
             const viewerSection = document.getElementById('ifcViewerSection');
             const viewerContainer = document.getElementById('ifcViewerContainer');
             const viewerInfoDiv = document.getElementById('ifcViewerInfo');
@@ -694,7 +712,7 @@
             
             viewerSection.style.display = 'block';
             
-            // Create simple 3D viewer with Three.js
+            // Clear container
             viewerContainer.innerHTML = '';
             
             // Scene setup
@@ -703,47 +721,183 @@
             
             // Camera
             const camera = new THREE.PerspectiveCamera(75, viewerContainer.clientWidth / viewerContainer.clientHeight, 0.1, 10000);
-            camera.position.set(10, 10, 10);
+            camera.position.set(20, 20, 20);
             camera.lookAt(0, 0, 0);
             
             // Renderer
             const renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(viewerContainer.clientWidth, viewerContainer.clientHeight);
             renderer.setClearColor(0x1a1a2e);
+            renderer.shadowMap.enabled = true;
             viewerContainer.appendChild(renderer.domElement);
+            
+            // Controls
+            const controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.screenSpacePanning = false;
+            controls.minDistance = 5;
+            controls.maxDistance = 500;
             
             // Lighting
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
             scene.add(ambientLight);
             
             const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-            directionalLight.position.set(10, 10, 10);
+            directionalLight.position.set(20, 30, 20);
+            directionalLight.castShadow = true;
             scene.add(directionalLight);
             
-            // Add a placeholder geometry to represent the model
-            // In production, you would load the actual IFC converted to glTF
-            const geometry = new THREE.BoxGeometry(4, 6, 4);
-            const material = new THREE.MeshPhongMaterial({ 
-                color: 0x3498db,
-                transparent: true,
-                opacity: 0.8,
-                wireframe: false
-            });
-            const cube = new THREE.Mesh(geometry, material);
-            scene.add(cube);
+            const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
+            directionalLight2.position.set(-20, 10, -20);
+            scene.add(directionalLight2);
             
-            // Add wireframe overlay
-            const wireframeGeometry = new THREE.WireframeGeometry(geometry);
-            const wireframeMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
-            const wireframe = new THREE.LineSegments(wireframeGeometry, wireframeMaterial);
-            cube.add(wireframe);
+            // Load IFC file using web-ifc-three
+            let modelLoaded = false;
             
-            // Animation
-            let rotationSpeed = 0.005;
+            try {
+                const ifcLoader = new IFCLoader();
+                await ifcLoader.ifcManager.setupWasm();
+                
+                // Load the IFC file from the backend
+                const ifcUrl = `/api/viewer/${sessionId}/${viewerInfo.filename}`;
+                
+                ifcLoader.load(
+                    ifcUrl,
+                    (ifcModel) => {
+                        modelLoaded = true;
+                        
+                        // Center the model
+                        const box = new THREE.Box3().setFromObject(ifcModel);
+                        const center = box.getCenter(new THREE.Vector3());
+                        const size = box.getSize(new THREE.Vector3());
+                        
+                        // Adjust camera based on model size
+                        const maxDim = Math.max(size.x, size.y, size.z);
+                        const fov = camera.fov * (Math.PI / 180);
+                        let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+                        cameraZ *= 1.5; // Zoom out a bit
+                        
+                        camera.position.set(center.x + cameraZ/2, center.y + cameraZ/2, center.z + cameraZ/2);
+                        camera.lookAt(center);
+                        controls.target.copy(center);
+                        controls.update();
+                        
+                        // Add model to scene
+                        scene.add(ifcModel);
+                        
+                        console.log('IFC model loaded successfully');
+                    },
+                    (xhr) => {
+                        console.log(`IFC loading: ${(xhr.loaded / xhr.total * 100).toFixed(0)}%`);
+                    },
+                    (error) => {
+                        console.error('Error loading IFC file:', error);
+                        // Fallback: show bounding box representation
+                        createBoundingBoxRepresentation(scene, viewerInfo);
+                    }
+                );
+            } catch (error) {
+                console.error('Error initializing IFC loader:', error);
+                // Fallback: show bounding box representation
+                createBoundingBoxRepresentation(scene, viewerInfo);
+            }
+            
+            // Helper function to create a simple representation if IFC fails to load
+            function createBoundingBoxRepresentation(scene, info) {
+                console.log('Creating fallback representation...');
+                
+                // Create a group to hold all elements
+                const modelGroup = new THREE.Group();
+                
+                // Create multiple boxes to represent different building elements
+                const materials = [
+                    new THREE.MeshPhongMaterial({ color: 0x3498db, transparent: true, opacity: 0.7 }),
+                    new THREE.MeshPhongMaterial({ color: 0xe74c3c, transparent: true, opacity: 0.7 }),
+                    new THREE.MeshPhongMaterial({ color: 0x2ecc71, transparent: true, opacity: 0.7 }),
+                    new THREE.MeshPhongMaterial({ color: 0xf39c12, transparent: true, opacity: 0.7 })
+                ];
+                
+                // Create foundation
+                const foundationGeo = new THREE.BoxGeometry(8, 1, 6);
+                const foundation = new THREE.Mesh(foundationGeo, materials[0]);
+                foundation.position.set(0, 0.5, 0);
+                foundation.castShadow = true;
+                modelGroup.add(foundation);
+                
+                // Create floors based on stories count
+                const storiesCount = info.stories_count || 3;
+                for (let i = 0; i < storiesCount; i++) {
+                    const floorY = 1.5 + i * 3;
+                    
+                    // Floor slab
+                    const floorGeo = new THREE.BoxGeometry(7.5, 0.3, 5.5);
+                    const floor = new THREE.Mesh(floorGeo, materials[2]);
+                    floor.position.set(0, floorY, 0);
+                    floor.castShadow = true;
+                    modelGroup.add(floor);
+                    
+                    // Walls (simplified)
+                    if (i < storiesCount - 1) {
+                        const wallHeight = 2.5;
+                        
+                        // Front wall
+                        const frontWallGeo = new THREE.BoxGeometry(7.5, wallHeight, 0.2);
+                        const frontWall = new THREE.Mesh(frontWallGeo, materials[1]);
+                        frontWall.position.set(0, floorY + wallHeight/2, 2.7);
+                        frontWall.castShadow = true;
+                        modelGroup.add(frontWall);
+                        
+                        // Back wall
+                        const backWall = new THREE.Mesh(frontWallGeo, materials[1]);
+                        backWall.position.set(0, floorY + wallHeight/2, -2.7);
+                        backWall.castShadow = true;
+                        modelGroup.add(backWall);
+                        
+                        // Left wall
+                        const leftWallGeo = new THREE.BoxGeometry(0.2, wallHeight, 5);
+                        const leftWall = new THREE.Mesh(leftWallGeo, materials[1]);
+                        leftWall.position.set(-3.7, floorY + wallHeight/2, 0);
+                        leftWall.castShadow = true;
+                        modelGroup.add(leftWall);
+                        
+                        // Right wall
+                        const rightWall = new THREE.Mesh(leftWallGeo, materials[1]);
+                        rightWall.position.set(3.7, floorY + wallHeight/2, 0);
+                        rightWall.castShadow = true;
+                        modelGroup.add(rightWall);
+                    }
+                }
+                
+                // Roof
+                const roofGeo = new THREE.ConeGeometry(5, 2, 4);
+                const roofMat = new THREE.MeshPhongMaterial({ color: 0x8e44ad });
+                const roof = new THREE.Mesh(roofGeo, roofMat);
+                roof.position.set(0, 1.5 + (storiesCount - 1) * 3 + 2.5 + 1, 0);
+                roof.rotation.y = Math.PI / 4;
+                roof.castShadow = true;
+                modelGroup.add(roof);
+                
+                // Center the entire model
+                const box = new THREE.Box3().setFromObject(modelGroup);
+                const center = box.getCenter(new THREE.Vector3());
+                modelGroup.position.sub(center);
+                
+                scene.add(modelGroup);
+                
+                // Adjust camera
+                camera.position.set(15, 15, 15);
+                camera.lookAt(0, 0, 0);
+                controls.target.set(0, 0, 0);
+                controls.update();
+                
+                console.log('Fallback model created with', storiesCount, 'stories');
+            }
+            
+            // Animation loop
             function animate() {
                 requestAnimationFrame(animate);
-                cube.rotation.y += rotationSpeed;
-                cube.rotation.x += rotationSpeed * 0.5;
+                controls.update();
                 renderer.render(scene, camera);
             }
             animate();
