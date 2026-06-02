@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from scripts.page_splitter import extract_pages_from_pdf
 from scripts.ifc_parser import parse_ifc_file
+from scripts.materials_summary import main as create_materials_summary
 
 app = Flask(__name__, static_folder='../frontend', static_url_path='')
 CORS(app)
@@ -120,6 +121,15 @@ def process_files():
                 ifc_result = parse_ifc_file(ifc_path, session_folder)
                 results['ifc_results'] = ifc_result
                 session_info['ifc_excel_file'] = ifc_result.get('excel_filename')
+                
+                # Создаем сводную таблицу по материалам после создания IFC отчета
+                if ifc_result.get('excel_filename'):
+                    excel_path = os.path.join(session_folder, ifc_result['excel_filename'])
+                    if os.path.exists(excel_path):
+                        print(f"Создание сводной таблицы по материалам: {excel_path}")
+                        materials_excel_path = create_materials_summary(excel_path)
+                        session_info['materials_excel_file'] = os.path.basename(materials_excel_path)
+                        print(f"Сводная таблица сохранена: {session_info['materials_excel_file']}")
             except Exception as e:
                 print(f"Error parsing IFC file {ifc_path}: {e}")
                 session_info['ifc_error'] = str(e)
@@ -147,6 +157,7 @@ def process_files():
         'drawing_pages_count': len(results['drawing_pages']),
         'ifc_processed': results['ifc_results'] is not None,
         'ifc_excel_file': session_info.get('ifc_excel_file'),
+        'materials_excel_file': session_info.get('materials_excel_file'),
         'summary': session_info['results_summary']
     })
 
