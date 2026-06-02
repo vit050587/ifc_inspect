@@ -900,24 +900,28 @@
                         }
                         
                         if (meshCount > 0) {
-                            // Center the model
+                            // Center the model - translate to origin first
                             const box = new THREE.Box3().setFromObject(modelGroup);
                             const center = box.getCenter(new THREE.Vector3());
                             const size = box.getSize(new THREE.Vector3());
                             
                             console.log('Model bounding box:', { center: center.toArray(), size: size.toArray() });
                             
+                            // Translate model so its center is at origin
+                            modelGroup.position.sub(center);
+                            
                             // Adjust camera based on model size
                             const maxDim = Math.max(size.x, size.y, size.z);
                             const fov = camera.fov * (Math.PI / 180);
                             let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
-                            cameraZ *= 2.0;
+                            cameraZ *= 1.5; // Zoom factor for better framing
                             
                             console.log('Setting camera position, maxDim:', maxDim, 'cameraZ:', cameraZ);
                             
-                            camera.position.set(center.x + cameraZ/2, center.y + cameraZ/2, center.z + cameraZ/2);
-                            camera.lookAt(center);
-                            controls.target.copy(center);
+                            // Position camera to view the model from an angle
+                            camera.position.set(cameraZ * 0.7, cameraZ * 0.5, cameraZ * 0.7);
+                            camera.lookAt(0, 0, 0);
+                            controls.target.set(0, 0, 0);
                             controls.update();
                             
                             scene.add(modelGroup);
