@@ -303,6 +303,86 @@
         .page-type-text {
             color: #95a5a6;
         }
+        
+        /* IFC Viewer Styles */
+        .ifc-viewer-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #3498db;
+        }
+        
+        .ifc-viewer-section h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+        
+        .ifc-viewer-container {
+            width: 100%;
+            height: 500px;
+            background: #1a1a2e;
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .ifc-viewer-container iframe,
+        .ifc-viewer-container canvas {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        
+        .ifc-viewer-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #95a5a6;
+            text-align: center;
+            padding: 40px;
+        }
+        
+        .ifc-viewer-placeholder .icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+        
+        .ifc-viewer-info {
+            margin-top: 15px;
+            padding: 15px;
+            background: white;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+        
+        .ifc-viewer-info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .ifc-info-item {
+            background: #ecf0f1;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        
+        .ifc-info-item label {
+            display: block;
+            font-size: 11px;
+            color: #7f8c8d;
+            margin-bottom: 5px;
+        }
+        
+        .ifc-info-item .value {
+            font-weight: 600;
+            color: #2c3e50;
+        }
     </style>
 </head>
 <body>
@@ -396,15 +476,34 @@
                             </tbody>
                         </table>
                     </div>
+                    
+                    <!-- IFC Viewer Section -->
+                    <div class="ifc-viewer-section" id="ifcViewerSection" style="display: none;">
+                        <h3>🏗️ 3D просмотр IFC модели</h3>
+                        <div class="ifc-viewer-container" id="ifcViewerContainer">
+                            <div class="ifc-viewer-placeholder" id="ifcViewerPlaceholder">
+                                <div class="icon">🏢</div>
+                                <p>Модель загружается...</p>
+                            </div>
+                        </div>
+                        <div class="ifc-viewer-info" id="ifcViewerInfo" style="display: none;">
+                            <strong>Информация о модели:</strong>
+                            <div class="ifc-viewer-info-grid" id="ifcViewerInfoGrid">
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
     
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three-gltf-loader@0.0.1/index.min.js"></script>
     <script>
         let sessionId = null;
         let selectedFiles = [];
         let ifcExcelFile = null;
+        let ifcViewerInfo = null;
         
         // File upload handling
         const dropZone = document.getElementById('dropZone');
@@ -541,6 +640,7 @@
             const resultsSection = document.getElementById('resultsSection');
             const downloadSection = document.getElementById('downloadSection');
             const pagesInfo = document.getElementById('pagesInfo');
+            const ifcViewerSection = document.getElementById('ifcViewerSection');
             
             // Update counters
             document.getElementById('textPagesCount').textContent = data.text_pages_count || 0;
@@ -555,6 +655,12 @@
                             const ifcResults = resultsData.results.ifc_results;
                             document.getElementById('ifcElementsCount').textContent = ifcResults.total_elements || 0;
                             document.getElementById('materialsCount').textContent = ifcResults.materials_count || 0;
+                        }
+                        
+                        // Load IFC viewer info
+                        if (resultsData.session_info && resultsData.session_info.ifc_viewer_info) {
+                            ifcViewerInfo = resultsData.session_info.ifc_viewer_info[0];
+                            showIFCViewer(ifcViewerInfo);
                         }
                     })
                     .catch(err => console.error('Error loading detailed results:', err));
@@ -573,6 +679,111 @@
             }
             
             resultsSection.classList.add('active');
+        }
+        
+        function showIFCViewer(viewerInfo) {
+            const viewerSection = document.getElementById('ifcViewerSection');
+            const viewerContainer = document.getElementById('ifcViewerContainer');
+            const viewerInfoDiv = document.getElementById('ifcViewerInfo');
+            const infoGrid = document.getElementById('ifcViewerInfoGrid');
+            
+            if (!viewerInfo || !viewerInfo.valid) {
+                console.warn('IFC viewer info not available or invalid');
+                return;
+            }
+            
+            viewerSection.style.display = 'block';
+            
+            // Create simple 3D viewer with Three.js
+            viewerContainer.innerHTML = '';
+            
+            // Scene setup
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1a1a2e);
+            
+            // Camera
+            const camera = new THREE.PerspectiveCamera(75, viewerContainer.clientWidth / viewerContainer.clientHeight, 0.1, 10000);
+            camera.position.set(10, 10, 10);
+            camera.lookAt(0, 0, 0);
+            
+            // Renderer
+            const renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(viewerContainer.clientWidth, viewerContainer.clientHeight);
+            renderer.setClearColor(0x1a1a2e);
+            viewerContainer.appendChild(renderer.domElement);
+            
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 10, 10);
+            scene.add(directionalLight);
+            
+            // Add a placeholder geometry to represent the model
+            // In production, you would load the actual IFC converted to glTF
+            const geometry = new THREE.BoxGeometry(4, 6, 4);
+            const material = new THREE.MeshPhongMaterial({ 
+                color: 0x3498db,
+                transparent: true,
+                opacity: 0.8,
+                wireframe: false
+            });
+            const cube = new THREE.Mesh(geometry, material);
+            scene.add(cube);
+            
+            // Add wireframe overlay
+            const wireframeGeometry = new THREE.WireframeGeometry(geometry);
+            const wireframeMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
+            const wireframe = new THREE.LineSegments(wireframeGeometry, wireframeMaterial);
+            cube.add(wireframe);
+            
+            // Animation
+            let rotationSpeed = 0.005;
+            function animate() {
+                requestAnimationFrame(animate);
+                cube.rotation.y += rotationSpeed;
+                cube.rotation.x += rotationSpeed * 0.5;
+                renderer.render(scene, camera);
+            }
+            animate();
+            
+            // Handle window resize
+            window.addEventListener('resize', () => {
+                camera.aspect = viewerContainer.clientWidth / viewerContainer.clientHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(viewerContainer.clientWidth, viewerContainer.clientHeight);
+            });
+            
+            // Display model info
+            infoGrid.innerHTML = `
+                <div class="ifc-info-item">
+                    <label>Проект</label>
+                    <div class="value">${viewerInfo.project_name || 'N/A'}</div>
+                </div>
+                <div class="ifc-info-item">
+                    <label>Элементов</label>
+                    <div class="value">${viewerInfo.element_count || 0}</div>
+                </div>
+                <div class="ifc-info-item">
+                    <label>Зданий</label>
+                    <div class="value">${viewerInfo.buildings_count || 0}</div>
+                </div>
+                <div class="ifc-info-item">
+                    <label>Этажей</label>
+                    <div class="value">${viewerInfo.stories_count || 0}</div>
+                </div>
+                <div class="ifc-info-item">
+                    <label>Схема IFC</label>
+                    <div class="value">${viewerInfo.schema || 'N/A'}</div>
+                </div>
+                <div class="ifc-info-item">
+                    <label>Размер файла</label>
+                    <div class="value">${formatFileSize(viewerInfo.file_size || 0)}</div>
+                </div>
+            `;
+            
+            viewerInfoDiv.style.display = 'block';
         }
         
         async function loadPagesTable() {
