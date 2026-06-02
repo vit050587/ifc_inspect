@@ -497,14 +497,14 @@
         </div>
     </div>
     
-    <!-- IFC Viewer Libraries -->
+    <!-- IFC Viewer Libraries - Using reliable CDN with fallbacks -->
     <script type="importmap">
     {
         "imports": {
-            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
-            "web-ifc-three": "https://unpkg.com/web-ifc-three@0.0.126/IFCLoader.js",
-            "web-ifc": "https://unpkg.com/web-ifc@0.0.56/web-ifc-api.js"
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+            "web-ifc-three": "https://cdn.jsdelivr.net/npm/web-ifc-three@0.0.126/IFCLoader.js",
+            "web-ifc": "https://cdn.jsdelivr.net/npm/web-ifc@0.0.56/web-ifc-api.js"
         }
     }
     </script>
@@ -519,13 +519,37 @@
         window.IFCLoader = IFCLoader;
         window.WEBIFC = WEBIFC;
         
+        // Set WASM path explicitly
+        if (window.IFCLoader && window.IFCLoader.IFCManager) {
+            window.IFCLoader.IFCManager.setWasmPath('https://cdn.jsdelivr.net/npm/web-ifc@0.0.56/');
+        }
+        
         // Signal that libraries are loaded
         window.viewerLibrariesLoaded = true;
-        console.log('Viewer libraries loaded successfully');
+        console.log('✓ Viewer libraries loaded successfully from CDN');
+        console.log('  THREE version:', THREE.REVISION);
+        console.log('  IFCLoader:', !!window.IFCLoader);
+        console.log('  OrbitControls:', !!window.OrbitControls);
         
         // Expose the init function globally
         window.initViewerLibraries = function() {
             return Promise.resolve();
+        };
+    </script>
+    <script>
+        // Fallback loader in case module fails
+        window.checkViewerLibraries = function() {
+            const hasThree = typeof window.THREE !== 'undefined';
+            const hasIFCLoader = typeof window.IFCLoader !== 'undefined';
+            const hasOrbitControls = typeof window.OrbitControls !== 'undefined';
+            
+            console.log('Library check:', {
+                THREE: hasThree,
+                IFCLoader: hasIFCLoader,
+                OrbitControls: hasOrbitControls
+            });
+            
+            return hasThree && hasIFCLoader && hasOrbitControls;
         };
     </script>
     <script>
