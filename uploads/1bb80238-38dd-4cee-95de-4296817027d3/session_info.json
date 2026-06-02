@@ -1,0 +1,15 @@
+{
+  "session_id": "1bb80238-38dd-4cee-95de-4296817027d3",
+  "status": "completed",
+  "pdf_files": [],
+  "ifc_files": [
+    "К01_КР_П_R19.ifc"
+  ],
+  "other_files": [],
+  "ifc_excel_file": "ifc_report.xlsx",
+  "results_summary": {
+    "text_pages_count": 0,
+    "drawing_pages_count": 0,
+    "ifc_processed": true
+  }
+}

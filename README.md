@@ -84,7 +84,7 @@ cd backend
 python app.py
 ```
 
-Сервер запустится на порту **5001**: http://localhost:5001
+Сервер запустится на порту **6003**: http://localhost:6003
 
 ### Запуск в продакшене
 
@@ -106,7 +106,7 @@ chmod +x tunnel.sh
 ./tunnel.sh <remote_host> <remote_port>
 ```
 
-Затем откройте http://localhost:8080 в браузере.
+Затем откройте http://localhost:8082 в браузере.
 
 ## 📡 API Endpoints
 
@@ -142,7 +142,7 @@ curl -X POST http://localhost:5001/api/upload \
 #### Обработка файлов
 
 ```bash
-curl -X POST http://localhost:5001/api/process \
+curl -X POST http://localhost:6003/api/process \
   -H "Content-Type: application/json" \
   -d '{"session_id": "uuid-string"}'
 ```
@@ -150,7 +150,7 @@ curl -X POST http://localhost:5001/api/process \
 #### Получение результатов
 
 ```bash
-curl http://localhost:5001/api/results/uuid-string
+curl http://localhost:6003/api/results/uuid-string
 ```
 
 ## 🔄 Алгоритм работы
@@ -266,7 +266,7 @@ curl http://localhost:5001/api/results/uuid-string
 
 | Параметр | Значение | Файл |
 |----------|----------|------|
-| Порт разработки | 5001 | backend/app.py |
+| Порт разработки | 6003 | backend/app.py |
 | Порт продакшена | 6003 | start-dev.sh |
 | Папка загрузок | uploads/ | backend/app.py |
 | Debug режим | True | backend/app.py |
