@@ -59,7 +59,7 @@ def convert_ifc_to_threejs_json(ifc_path, output_json_path):
         
         material_map = {}
         material_index = 0
-        max_elements = 500  # Limit for web performance
+        max_elements = 50000  # Limit for web performance
         
         for product in products:
             if element_count >= max_elements:
