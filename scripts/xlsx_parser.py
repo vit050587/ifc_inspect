@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
 Универсальный скрипт парсинга Excel файлов отчетов IFC (ifc_report.xlsx).
-Извлекает ВСЕ материалы из таблицы с их параметрами и единицами измерения.
-Использует LLM-модель gemma4:31b для интеллектуального анализа материалов.
+Извлекает ВСЕ материалы с их параметрами (объем, площадь, штуки) используя LLM gemma4:31b.
 
 Особенности:
 - Работает с любыми материалами (бетон, гидроизоляция, утеплитель, раствор, арматура и др.)
-- Автоматически определяет тип единицы измерения (объем м³, площадь м², штуки, литры)
-- Группирует данные по полному наименованию материала
+- Автоматически находит колонки с материалами по паттерну Qto_*:<номер>_<название материала>
+- Определяет тип единицы измерения через LLM (объем м³, площадь м², штуки, литры)
+- Группирует данные по полному наименованию материала с учетом подвидов
 - Считает количество элементов для каждого материала
 - Создает сводную таблицу с агрегированными данными
-- Использует gemma4:31b для классификации материалов и определения единиц измерения
+- Обрабатывает элементы без параметров объема/площади как поштучные
 """
 
 import os
@@ -81,7 +81,45 @@ def analyze_material_with_llm(material_name: str) -> Dict[str, Any]:
     Returns:
         Словарь с результатами анализа
     """
-    # Паттерны для определения типа единицы измерения по названию материала (fallback)
+    prompt = f"""Проанализируй строительный материал и определи его характеристики.
+
+Материал: "{material_name}"
+
+Ответь ТОЛЬКО в формате JSON без дополнительных пояснений:
+{{
+    "unit_type": "volume" или "area" или "length" или "pieces" или "volume_liquid",
+    "unit_label": "м³" или "м²" или "м" или "шт" или "л",
+    "material_group": "Бетон" или "Гидроизоляция" или "Утеплитель" или "Раствор" или "Арматура" или "Праймер" или "Мастика" или "Изоляция" или "Другой"
+}}
+
+Правила определения типа:
+- volume (м³): бетон, раствор, грунт, песок, щебень, керамзит, любые объемные материалы
+- area (м²): гидроизоляция, пароизоляция, теплоизоляция, утеплитель, мембрана, пленка, покрытие, облицовка, штукатурка
+- length (м): шнур, профиль, труба, кабель, провод, арматура (погонные метры)
+- pieces (шт): анкер, дюбель, саморез, болт, гайка, шайба, закладная деталь, элемент, изделие, конструкция, сетка, каркас
+- volume_liquid (л): праймер, мастика, клей, герметик, жидкость
+
+Если материал содержит марку (например "Бетон B30 W6 F150"), определяй тип по основному слову ("Бетон" -> volume).
+"""
+
+    response = call_llm(prompt)
+    
+    # Если LLM вернул результат, парсим его
+    if response:
+        try:
+            # Пытаемся найти JSON в ответе
+            json_match = re.search(r'\{[^{}]*\}', response, re.DOTALL)
+            if json_match:
+                result = json.loads(json_match.group())
+                return {
+                    "unit_type": result.get("unit_type", "pieces"),
+                    "unit_label": result.get("unit_label", "шт"),
+                    "material_group": result.get("material_group", "Другой")
+                }
+        except (json.JSONDecodeError, AttributeError):
+            pass
+    
+    # Fallback: используем паттерны если LLM недоступен или не вернул результат
     unit_patterns = {
         'volume': [
             r'бетон', r'раствор', r'грунт', r'песок', r'щебень', r'керамзит',
@@ -107,8 +145,7 @@ def analyze_material_with_llm(material_name: str) -> Dict[str, Any]:
         ]
     }
     
-    # Словарь соответствия типов материалов для группировки (fallback)
-    material_groups = {
+    material_groups_fallback = {
         'Бетон': ['бетон', 'B', 'В'],
         'Гидроизоляция': ['гидроизоляц', 'мембран', 'техноэласт', 'плантер'],
         'Утеплитель': ['утеплител', 'полистирол', 'carbon', 'пеноплэкс', 'пенопласт'],
@@ -119,43 +156,6 @@ def analyze_material_with_llm(material_name: str) -> Dict[str, Any]:
         'Изоляция': ['пароизоляц', 'теплоизоляц'],
     }
     
-    prompt = f"""Проанализируй строительный материал и определи его характеристики.
-
-Материал: "{material_name}"
-
-Ответь ТОЛЬКО в формате JSON без дополнительных пояснений:
-{{
-    "unit_type": "volume" или "area" или "length" или "pieces" или "volume_liquid",
-    "unit_label": "м³" или "м²" или "м" или "шт" или "л",
-    "material_group": "Бетон" или "Гидроизоляция" или "Утеплитель" или "Раствор" или "Арматура" или "Праймер" или "Мастика" или "Изоляция" или "Другой"
-}}
-
-Правила:
-- volume (м³): бетон, раствор, грунт, песок, щебень, керамзит
-- area (м²): гидроизоляция, пароизоляция, теплоизоляция, утеплитель, мембрана, пленка, покрытие, облицовка, штукатурка
-- length (м): шнур, профиль, труба, кабель, провод, арматура (погонные метры)
-- pieces (шт): анкер, дюбель, саморез, болт, гайка, шайба, закладная деталь, элемент, изделие, конструкция, сетка, каркас
-- volume_liquid (л): праймер, мастика, клей, герметик, жидкость
-"""
-
-    response = call_llm(prompt)
-    
-    # Если LLM вернул результат, парсим его
-    if response:
-        try:
-            # Пытаемся найти JSON в ответе
-            json_match = re.search(r'\{[^{}]*\}', response, re.DOTALL)
-            if json_match:
-                result = json.loads(json_match.group())
-                return {
-                    "unit_type": result.get("unit_type", "pieces"),
-                    "unit_label": result.get("unit_label", "шт"),
-                    "material_group": result.get("material_group", "Другой")
-                }
-        except (json.JSONDecodeError, AttributeError):
-            pass
-    
-    # Fallback: используем паттерны если LLM недоступен или не вернул результат
     name_lower = material_name.lower()
     
     # Определяем тип единицы измерения по паттернам
@@ -170,7 +170,7 @@ def analyze_material_with_llm(material_name: str) -> Dict[str, Any]:
     
     # Определяем группу материала по паттернам
     material_group = "Другой"
-    for group, keywords in material_groups.items():
+    for group, keywords in material_groups_fallback.items():
         for keyword in keywords:
             if keyword.lower() in name_lower:
                 material_group = group
@@ -236,6 +236,11 @@ def parse_excel_specification(excel_path: str) -> Dict[str, Any]:
     Универсальный парсер Excel файла отчета IFC (лист "Элементы").
     Извлекает ВСЕ материалы из таблицы с их значениями и единицами измерения.
     Использует LLM gemma4:31b для анализа материалов.
+    
+    Особенности:
+    - Находит колонки с материалами по паттерну Qto_*:<номер>_<название материала>
+    - Параметры размерности могут быть в разных столбцах для разных категорий элементов
+    - Обрабатывает материалы с подвидами (например "Бетон B30", "Бетон B35")
     """
     
     print(f"\n📊 Парсинг Excel отчета IFC: {os.path.basename(excel_path)}")
@@ -251,7 +256,6 @@ def parse_excel_specification(excel_path: str) -> Dict[str, Any]:
         # Ожидаемые имена колонок
         col_long_name = 'Element Specific:LongName'
         col_ifc_class = 'Ifc Class'
-        col_concrete_grade = 'ExpCheck_MaterialConcrete:MGE_ConcreteGrade'
         
         # Проверяем наличие обязательных колонок
         if col_ifc_class not in df.columns:
@@ -260,6 +264,23 @@ def parse_excel_specification(excel_path: str) -> Dict[str, Any]:
             col_long_name = 'Element Specific:Name'
             if col_long_name not in df.columns:
                 raise ValueError(f"Столбец '{col_long_name}' не найден в файле")
+        
+        # Находим все колонки с материалами по паттерну Qto_*:<цифра>_<название>
+        material_columns = []
+        material_pattern = re.compile(r'Qto_\w+:(\d+)_([^_].*)$')
+        
+        for col in df.columns:
+            match = material_pattern.search(col)
+            if match:
+                num = match.group(1)
+                material_name = match.group(2).strip()
+                material_columns.append({
+                    'column': col,
+                    'number': num,
+                    'material_name': material_name
+                })
+        
+        print(f"   📋 Найдено {len(material_columns)} колонок с материалами")
         
         items = []
         skipped_rows = 0
@@ -273,133 +294,84 @@ def parse_excel_specification(excel_path: str) -> Dict[str, Any]:
             
             ifc_class = str(ifc_class).strip()
             
-            # Пропускаем если класс не в маппинге
-            if ifc_class not in IFC_ELEMENT_MAPPING:
-                skipped_rows += 1
-                continue
-            
             long_name = row.get(col_long_name, '')
             if pd.isna(long_name):
                 long_name = ''
             
-            # Получаем марку бетона
-            concrete_grade = row.get(col_concrete_grade, '')
-            if pd.isna(concrete_grade) or concrete_grade == '0':
-                concrete_grade = ''
+            # Флаг: были ли найдены параметры для этой строки
+            has_params = False
             
-            # Получаем конфиг для этого типа элемента
-            element_config = IFC_ELEMENT_MAPPING[ifc_class]
-            qto_prefix = element_config['qto_prefix']
-            volume_col_name = f"{qto_prefix}:{element_config.get('volume_col')}" if element_config.get('volume_col') else None
-            area_col_name = f"{qto_prefix}:{element_config.get('area_col')}" if element_config.get('area_col') else None
-            length_col_name = f"{qto_prefix}:{element_config.get('length_col')}" if element_config.get('length_col') else None
-            
-            # Получаем значения объема, площади и длины
-            volume_value = None
-            area_value = None
-            length_value = None
-            
-            if volume_col_name and volume_col_name in df.columns:
-                vol_val = row.get(volume_col_name)
-                if vol_val and str(vol_val) != '0' and str(vol_val) != 'nan':
+            # Проходим по всем колонкам с материалами
+            for mat_col_info in material_columns:
+                col_name = mat_col_info['column']
+                material_name = mat_col_info['material_name']
+                
+                if col_name not in df.columns:
+                    continue
+                
+                value = row.get(col_name)
+                if value and str(value) != '0' and str(value) != 'nan' and str(value).strip():
                     try:
-                        volume_value = float(str(vol_val).replace(',', '.'))
+                        numeric_value = float(str(value).replace(',', '.'))
+                        if numeric_value <= 0:
+                            continue
+                        
+                        has_params = True
+                        
+                        # Используем LLM для анализа материала (с кэшированием)
+                        if material_name not in llm_cache:
+                            llm_result = analyze_material_with_llm(material_name)
+                            llm_cache[material_name] = llm_result
+                        else:
+                            llm_result = llm_cache[material_name]
+                        
+                        material_group = llm_result['material_group']
+                        unit_type = llm_result['unit_type']
+                        unit_label = llm_result['unit_label']
+                        
+                        items.append({
+                            'ifc_class': ifc_class,
+                            'element_name': long_name,
+                            'material_full': material_name,
+                            'material_group': material_group,
+                            'unit_type': unit_type,
+                            'unit_label': unit_label,
+                            'value': numeric_value,
+                            'metric_type': unit_type,
+                            'source_column': col_name
+                        })
+                        
                     except (ValueError, TypeError):
                         pass
             
-            if area_col_name and area_col_name in df.columns:
-                area_val = row.get(area_col_name)
-                if area_val and str(area_val) != '0' and str(area_val) != 'nan':
-                    try:
-                        area_value = float(str(area_val).replace(',', '.'))
-                    except (ValueError, TypeError):
-                        pass
-            
-            if length_col_name and length_col_name in df.columns:
-                len_val = row.get(length_col_name)
-                if len_val and str(len_val) != '0' and str(len_val) != 'nan':
-                    try:
-                        length_value = float(str(len_val).replace(',', '.'))
-                    except (ValueError, TypeError):
-                        pass
-            
-            # Определяем материал
-            # Базовый материал из MGE_Material (если есть специфичная колонка)
-            base_material_col = f'ExpCheck_{ifc_class[3:]}:MGE_Material'  # IfcWall -> ExpCheck_Wall:MGE_Material
-            base_material = 'Бетон'  # значение по умолчанию
-            
-            if base_material_col in df.columns:
-                mat_val = row.get(base_material_col)
-                if mat_val and str(mat_val) != '0' and str(mat_val) != 'nan':
-                    base_material = str(mat_val).strip()
-            
-            # Формируем полное название материала с маркой
-            if concrete_grade:
-                full_material = f"{base_material} {concrete_grade}"
-            else:
-                full_material = base_material
-            
-            # Используем LLM для анализа материала (с кэшированием)
-            if full_material not in llm_cache:
-                llm_result = analyze_material_with_llm(full_material)
-                llm_cache[full_material] = llm_result
-            else:
-                llm_result = llm_cache[full_material]
-            
-            material_group = llm_result['material_group']
-            unit_type = llm_result['unit_type']
-            unit_label = llm_result['unit_label']
-            
-            # Добавляем запись с объемом (если есть)
-            if volume_value is not None and volume_value > 0:
+            # Если нет ни одного параметра (объем/площадь/длина) - добавляем как штуку
+            if not has_params:
+                # Определяем базовый материал из MGE_Material если есть
+                base_material_col = f'ExpCheck_{ifc_class[3:]}:MGE_Material'
+                base_material = 'Неизвестный материал'
+                
+                if base_material_col in df.columns:
+                    mat_val = row.get(base_material_col)
+                    if mat_val and str(mat_val) != '0' and str(mat_val) != 'nan':
+                        base_material = str(mat_val).strip()
+                
+                # Используем LLM для анализа материала
+                if base_material not in llm_cache:
+                    llm_result = analyze_material_with_llm(base_material)
+                    llm_cache[base_material] = llm_result
+                else:
+                    llm_result = llm_cache[base_material]
+                
                 items.append({
                     'ifc_class': ifc_class,
                     'element_name': long_name,
-                    'material_full': full_material,
-                    'material_group': material_group,
-                    'unit_type': 'volume',
-                    'unit_label': 'м³',
-                    'value': volume_value,
-                    'metric_type': 'volume'
-                })
-            
-            # Добавляем запись с площадью (если есть)
-            if area_value is not None and area_value > 0:
-                items.append({
-                    'ifc_class': ifc_class,
-                    'element_name': long_name,
-                    'material_full': full_material,
-                    'material_group': material_group,
-                    'unit_type': 'area',
-                    'unit_label': 'м²',
-                    'value': area_value,
-                    'metric_type': 'area'
-                })
-            
-            # Добавляем запись с длиной (если есть)
-            if length_value is not None and length_value > 0:
-                items.append({
-                    'ifc_class': ifc_class,
-                    'element_name': long_name,
-                    'material_full': full_material,
-                    'material_group': material_group,
-                    'unit_type': 'length',
-                    'unit_label': 'м',
-                    'value': length_value,
-                    'metric_type': 'length'
-                })
-            
-            # Если нет ни объема ни площади ни длины - добавляем как штуку
-            if volume_value is None and area_value is None and length_value is None:
-                items.append({
-                    'ifc_class': ifc_class,
-                    'element_name': long_name,
-                    'material_full': full_material,
-                    'material_group': material_group,
+                    'material_full': base_material,
+                    'material_group': llm_result['material_group'],
                     'unit_type': 'pieces',
                     'unit_label': 'шт',
                     'value': 1.0,
-                    'metric_type': 'pieces'
+                    'metric_type': 'pieces',
+                    'source_column': None
                 })
         
         print(f"   ✅ Извлечено {len(items)} записей о материалах (пропущено {skipped_rows} нерелевантных строк)")

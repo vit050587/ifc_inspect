@@ -1,102 +1,27 @@
 {
   "success": true,
   "source_file": "ifc_report.xlsx",
-  "total_items_parsed": 5923,
-  "total_materials": 14,
+  "total_items_parsed": 3292,
+  "total_materials": 2,
   "output_excel": "materials_summary.xlsx",
   "materials": {
+    "Неизвестный материал": {
+      "group": "Бетон",
+      "values": {
+        "pieces": {
+          "value": 1940.0,
+          "unit": "шт",
+          "element_count": 1940
+        }
+      }
+    },
     "Бетон": {
       "group": "Бетон",
       "values": {
         "pieces": {
-          "value": 1903.0,
+          "value": 1352.0,
           "unit": "шт",
-          "element_count": 1903
-        },
-        "volume": {
-          "value": 133.605,
-          "unit": "м³",
-          "element_count": 81
-        },
-        "area": {
-          "value": 7016.975,
-          "unit": "м²",
-          "element_count": 92
-        },
-        "length": {
-          "value": 601353.076,
-          "unit": "м",
-          "element_count": 74
-        }
-      }
-    },
-    "Бетон В30": {
-      "group": "Бетон",
-      "values": {
-        "volume": {
-          "value": 3931.077,
-          "unit": "м³",
-          "element_count": 1037
-        },
-        "area": {
-          "value": 1283854.046,
-          "unit": "м²",
-          "element_count": 1037
-        },
-        "length": {
-          "value": 3145952.806,
-          "unit": "м",
-          "element_count": 1016
-        }
-      }
-    },
-    "Бетон В10": {
-      "group": "Бетон",
-      "values": {
-        "volume": {
-          "value": 266.561,
-          "unit": "м³",
-          "element_count": 8
-        },
-        "area": {
-          "value": 5278.995,
-          "unit": "м²",
-          "element_count": 8
-        }
-      }
-    },
-    "Бетон В25": {
-      "group": "Бетон",
-      "values": {
-        "volume": {
-          "value": 2269.207,
-          "unit": "м³",
-          "element_count": 66
-        },
-        "area": {
-          "value": 23970.997,
-          "unit": "м²",
-          "element_count": 66
-        }
-      }
-    },
-    "Бетон В35": {
-      "group": "Бетон",
-      "values": {
-        "volume": {
-          "value": 1755.07,
-          "unit": "м³",
-          "element_count": 186
-        },
-        "area": {
-          "value": 6823.014,
-          "unit": "м²",
-          "element_count": 186
-        },
-        "length": {
-          "value": 640257.308,
-          "unit": "м",
-          "element_count": 163
+          "element_count": 1352
         }
       }
     }

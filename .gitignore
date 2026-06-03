@@ -2,37 +2,76 @@
 # Environment variables
 .env
 .env.local
-.env.*
+*.env.*
 
 # Uploads directory (contains temporary/generated files)
 uploads/
 
-# Python cache
+# Python specific
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+.Python
+*.so
+*.egg-info/
+.eggs/
 
 # Logs
 *.log
 
 # OS generated files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 
-# IDE files
-.vscode/
-.idea/
+# Backup files
+*~
+*.bak
 *.swp
 *.swo
 
-# Dependencies
-.venv/
-venv/
-node_modules/
+# IDE specific
+.vscode/
+.idea/
+*.iml
+*.ipr
+*.iws
 
-# Build artifacts
-dist/
+# Distribution / packaging
+.Python
 build/
-target/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Testing
+.coverage
+coverage/
+htmlcov/
+.nosetests
+.unit_test_results.xml
+.pytest_cache/
+.mypy_cache/
+
+# Virtual environments
+venv/
+.venv/
+ENV/
+env.bak/
 ```
