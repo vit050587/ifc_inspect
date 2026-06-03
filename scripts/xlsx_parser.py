@@ -62,6 +62,76 @@ def find_ifc_report_file(session_folder: str) -> Optional[str]:
     return str(report_path)
 
 
+def get_material_with_grade(row: pd.Series, ifc_class: str, base_material_col: str) -> str:
+    """
+    Получает полное имя материала с учетом марки (grade).
+    
+    Логика:
+    1. Берем базовый материал из ExpCheck_{Class}:MGE_Material
+    2. Если это 'Бетон' или подобный материал - добавляем марку из ExpCheck_MaterialConcrete:MGE_ConcreteGrade
+    3. Если марки нет в стандартной колонке, пытаемся извлечь из Element Specific:Name или ObjectType
+    4. Возвращаем комбинированное имя типа 'Бетон В35' или просто 'Бетон' если марки нет
+    """
+    import re
+    
+    # Получаем базовый материал
+    base_material = 'Не указан'
+    if base_material_col in row.index:
+        mat_val = row.get(base_material_col)
+        if mat_val and str(mat_val) != '0' and str(mat_val) != 'nan' and str(mat_val).strip():
+            base_material = str(mat_val).strip()
+    
+    # Если материал не указан или '0', пытаемся найти альтернативную колонку MGE_Material
+    if base_material == 'Не указан' or base_material == '0':
+        for col in row.index:
+            if 'MGE_Material' in col and ifc_class[3:] in col:
+                mat_val = row.get(col)
+                if mat_val and str(mat_val) != '0' and str(mat_val) != 'nan' and str(mat_val).strip():
+                    base_material = str(mat_val).strip()
+                    break
+    
+    # Если базовый материал - бетон или раствор, добавляем марку
+    concrete_like = ['бетон', 'раствор', 'смесь']
+    if any(x in base_material.lower() for x in concrete_like):
+        grade = None
+        
+        # Сначала ищем марку в стандартной колонке ExpCheck_MaterialConcrete:MGE_ConcreteGrade
+        grade_col = 'ExpCheck_MaterialConcrete:MGE_ConcreteGrade'
+        if grade_col in row.index:
+            grade_val = row.get(grade_col)
+            if grade_val and str(grade_val) != '0' and str(grade_val) != 'nan' and str(grade_val).strip():
+                grade = str(grade_val).strip()
+        
+        # Если марки нет в стандартной колонке, пытаемся извлечь из Element Specific:Name
+        if not grade or grade == '0':
+            name_col = 'Element Specific:Name'
+            if name_col in row.index:
+                elem_name = row.get(name_col)
+                if elem_name and str(elem_name) != 'nan' and str(elem_name).strip():
+                    elem_name = str(elem_name)
+                    # Ищем паттерн типа "В20", "В25", "В30", "В35", "М100" и т.д.
+                    grade_match = re.search(r'\b(В\d+|М\d+)\b', elem_name)
+                    if grade_match:
+                        grade = grade_match.group(1)
+        
+        # Если все еще нет марки, пробуем ObjectType
+        if not grade or grade == '0':
+            type_col = 'Element Specific:ObjectType'
+            if type_col in row.index:
+                obj_type = row.get(type_col)
+                if obj_type and str(obj_type) != 'nan' and str(obj_type).strip():
+                    obj_type = str(obj_type)
+                    grade_match = re.search(r'\b(В\d+|М\d+)\b', obj_type)
+                    if grade_match:
+                        grade = grade_match.group(1)
+        
+        # Если нашли марку, комбинируем с материалом
+        if grade and grade != '0':
+            return f"{base_material} {grade}"
+    
+    return base_material
+
+
 def parse_excel_report(excel_path: str) -> Dict[str, Any]:
     """
     Парсит Excel файл отчета IFC (лист "Элементы").
@@ -72,7 +142,7 @@ def parse_excel_report(excel_path: str) -> Dict[str, Any]:
     2. Ищем колонки с материалами по паттерну Qto_*:NN_Материал
     3. Для каждого материала берем значения (это уже объем/площадь в зависимости от типа)
     4. Также берем NetVolume, NetSideArea, OuterSurfaceArea и т.д. как дополнительные метрики
-    5. Агрегируем по (Тип RU, IfcClass, Материал)
+    5. Агрегируем по (Тип RU, IfcClass, Материал) с учетом марки бетона
     """
     
     print(f"\n📊 Парсинг Excel отчета IFC: {os.path.basename(excel_path)}")
@@ -195,20 +265,9 @@ def parse_excel_report(excel_path: str) -> Dict[str, Any]:
             if not has_material_data:
                 # Пытаемся найти материал из ExpCheck_*:MGE_Material
                 base_material_col = f'ExpCheck_{ifc_class[3:]}:MGE_Material'
-                base_material = 'Не указан'
                 
-                if base_material_col in df.columns:
-                    mat_val = row.get(base_material_col)
-                    if mat_val and str(mat_val) != '0' and str(mat_val) != 'nan' and str(mat_val).strip():
-                        base_material = str(mat_val).strip()
-                elif 'MGE_Material' in str(base_material_col) and base_material_col not in df.columns:
-                    # Пробуем найти любую колонку MGE_Material для этого класса
-                    for col in df.columns:
-                        if 'MGE_Material' in col and ifc_class[3:] in col:
-                            mat_val = row.get(col)
-                            if mat_val and str(mat_val) != '0' and str(mat_val) != 'nan':
-                                base_material = str(mat_val).strip()
-                                break
+                # Используем новую функцию для получения материала с маркой
+                base_material = get_material_with_grade(row, ifc_class, base_material_col)
                 
                 # Получаем объем и площадь из стандартных колонок
                 volume = 0.0
