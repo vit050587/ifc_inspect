@@ -11,6 +11,95 @@ import struct
 import tempfile
 
 
+def get_element_color(product, f):
+    """
+    Get the original color from IFC file for an element.
+    Tries to find IfcSurfaceStyle associated with the element's representation.
+    Falls back to type-based color if no style is found.
+    """
+    import ifcopenshell
+    
+    # Try to get color from associated styles
+    try:
+        # Check if product has representation items with styles
+        if hasattr(product, 'Representation') and product.Representation:
+            reps = product.Representation
+            if hasattr(reps, 'Representations'):
+                for rep in reps.Representations:
+                    if hasattr(rep, 'Items'):
+                        for item in rep.Items:
+                            # Check for StyledItem
+                            if item.is_a('IfcStyledItem'):
+                                for style in item.Styles:
+                                    if style.is_a('IfcSurfaceStyle'):
+                                        for surface_style in style.Styles:
+                                            if surface_style.is_a('IfcSurfaceStyleRendering') or \
+                                               surface_style.is_a('IfcSurfaceStyleShading'):
+                                                if hasattr(surface_style, 'SurfaceColour'):
+                                                    r = surface_style.SurfaceColour.Red
+                                                    g = surface_style.SurfaceColour.Green
+                                                    b = surface_style.SurfaceColour.Blue
+                                                    return [r, g, b]
+                            # Check for presentation styles directly on representation items
+                            if hasattr(item, 'StyledByItem'):
+                                for styled_item in item.StyledByItem:
+                                    if styled_item.is_a('IfcStyledItem'):
+                                        for style in styled_item.Styles:
+                                            if style.is_a('IfcSurfaceStyle'):
+                                                for surface_style in style.Styles:
+                                                    if surface_style.is_a('IfcSurfaceStyleRendering') or \
+                                                       surface_style.is_a('IfcSurfaceStyleShading'):
+                                                        if hasattr(surface_style, 'SurfaceColour'):
+                                                            r = surface_style.SurfaceColour.Red
+                                                            g = surface_style.SurfaceColour.Green
+                                                            b = surface_style.SurfaceColour.Blue
+                                                            return [r, g, b]
+    except Exception as e:
+        pass  # Fall through to type-based color
+    
+    # Fallback: generate color based on element type
+    elem_type = product.is_a()
+    
+    if 'Wall' in elem_type:
+        color = [0.8, 0.8, 0.8]  # Gray walls
+    elif 'Slab' in elem_type or 'Cover' in elem_type:
+        color = [0.7, 0.7, 0.9]  # Light blue slabs
+    elif 'Column' in elem_type:
+        color = [0.9, 0.7, 0.7]  # Light red columns
+    elif 'Beam' in elem_type:
+        color = [0.7, 0.9, 0.7]  # Light green beams
+    elif 'Door' in elem_type:
+        color = [0.9, 0.9, 0.5]  # Yellow doors
+    elif 'Window' in elem_type:
+        color = [0.5, 0.9, 0.9]  # Cyan windows
+    elif 'Stair' in elem_type:
+        color = [0.9, 0.7, 0.5]  # Orange stairs
+    elif 'OpeningElement' in elem_type:
+        color = [0.6, 0.6, 0.6]  # Dark gray openings
+    elif 'BuildingElementProxy' in elem_type:
+        color = [0.85, 0.85, 0.75]  # Light yellow proxies
+    elif 'ReinforcingMesh' in elem_type or 'ReinforcingBar' in elem_type:
+        color = [0.5, 0.5, 0.5]  # Dark gray reinforcement
+    elif 'Ramp' in elem_type:
+        color = [0.8, 0.6, 0.4]  # Brown ramp
+    elif 'Roof' in elem_type:
+        color = [0.6, 0.4, 0.4]  # Reddish roof
+    elif 'Railing' in elem_type:
+        color = [0.4, 0.6, 0.6]  # Teal railing
+    elif 'Plate' in elem_type:
+        color = [0.7, 0.8, 0.6]  # Light green plates
+    elif 'Member' in elem_type:
+        color = [0.6, 0.7, 0.8]  # Light blue members
+    elif 'Footing' in elem_type or 'Pile' in elem_type:
+        color = [0.5, 0.4, 0.3]  # Brown foundation
+    elif 'CurtainWall' in elem_type:
+        color = [0.6, 0.8, 0.9]  # Light cyan curtain walls
+    else:
+        color = [0.75, 0.75, 0.85]  # Default light purple
+    
+    return color
+
+
 def convert_ifc_to_threejs_json(ifc_path, output_json_path):
     """
     Convert IFC file to Three.js compatible JSON format using IfcOpenShell.
@@ -88,46 +177,11 @@ def convert_ifc_to_threejs_json(ifc_path, output_json_path):
                 # Get element type for color mapping
                 elem_type = product.is_a()
                 
-                # Generate different colors based on element type (not material name)
-                if 'Wall' in elem_type:
-                    color = [0.8, 0.8, 0.8]  # Gray walls
-                elif 'Slab' in elem_type or 'Cover' in elem_type:
-                    color = [0.7, 0.7, 0.9]  # Light blue slabs
-                elif 'Column' in elem_type:
-                    color = [0.9, 0.7, 0.7]  # Light red columns
-                elif 'Beam' in elem_type:
-                    color = [0.7, 0.9, 0.7]  # Light green beams
-                elif 'Door' in elem_type:
-                    color = [0.9, 0.9, 0.5]  # Yellow doors
-                elif 'Window' in elem_type:
-                    color = [0.5, 0.9, 0.9]  # Cyan windows
-                elif 'Stair' in elem_type:
-                    color = [0.9, 0.7, 0.5]  # Orange stairs
-                elif 'OpeningElement' in elem_type:
-                    color = [0.6, 0.6, 0.6]  # Dark gray openings
-                elif 'BuildingElementProxy' in elem_type:
-                    color = [0.85, 0.85, 0.75]  # Light yellow proxies
-                elif 'ReinforcingMesh' in elem_type or 'ReinforcingBar' in elem_type:
-                    color = [0.5, 0.5, 0.5]  # Dark gray reinforcement
-                elif 'Ramp' in elem_type:
-                    color = [0.8, 0.6, 0.4]  # Brown ramp
-                elif 'Roof' in elem_type:
-                    color = [0.6, 0.4, 0.4]  # Reddish roof
-                elif 'Railing' in elem_type:
-                    color = [0.4, 0.6, 0.6]  # Teal railing
-                elif 'Plate' in elem_type:
-                    color = [0.7, 0.8, 0.6]  # Light green plates
-                elif 'Member' in elem_type:
-                    color = [0.6, 0.7, 0.8]  # Light blue members
-                elif 'Footing' in elem_type or 'Pile' in elem_type:
-                    color = [0.5, 0.4, 0.3]  # Brown foundation
-                elif 'CurtainWall' in elem_type:
-                    color = [0.6, 0.8, 0.9]  # Light cyan curtain walls
-                else:
-                    color = [0.75, 0.75, 0.85]  # Default light purple
+                # Try to get original color from IFC file, fallback to type-based color
+                color = get_element_color(product, f)
                 
-                # Use element type as material key instead of geom.material
-                mat_key = elem_type
+                # Use element type + color as material key to group meshes with same appearance
+                mat_key = f"{elem_type}_{color[0]:.2f}_{color[1]:.2f}_{color[2]:.2f}"
                 if mat_key not in material_map:
                     material_map[mat_key] = material_index
                     geometry_data['materials'].append({
