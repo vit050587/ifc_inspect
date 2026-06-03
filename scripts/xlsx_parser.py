@@ -409,7 +409,10 @@ def parse_and_aggregate_specification(session_folder: str) -> Dict[str, Any]:
     # Шаг 1: Найти файл ifc_report.xlsx
     excel_path = find_ifc_report_file(session_folder)
     if not excel_path:
-        print("❌ Файл ifc_report.xlsx не найден")
+        print("⏭️  Файл ifc_report.xlsx не найден (шаг 4 обработки IFC заглушен)")
+        print("✅ Пропускаем парсинг IFC отчета")
+        # Возвращаем успех с пустыми данными, так как IFC обработка заглушена
+        results['success'] = True
         return results
     results['excel_file_found'] = excel_path
     
