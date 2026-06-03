@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
 """
-Улучшенный скрипт парсинга Excel файлов спецификаций IFC-экспорта.
-Извлекает марку материала из наименования элемента, объём (в зависимости от типа элемента) или количество.
-Агрегирует данные по маркам материалов.
+Скрипт парсинга Excel файлов отчетов IFC (ifc_report.xlsx).
+Извлекает марку материала из отдельной колонки ExpCheck_MaterialConcrete:MGE_ConcreteGrade,
+объём (в зависимости от типа элемента) или количество.
+Агрегирует данные по маркам материалов (например, "Бетон В30", "Бетон В35").
 Сохраняет результат в Excel файл в папке сессии.
 
-Улучшения:
-- Жёстко заданные имена столбцов (не поиск по синонимам)
-- Определение типа элемента по столбцу Ifc Class
-- Извлечение марки материала из Long Name через регулярное выражение (В30, В35, B30, B35 и т.д.)
+Особенности:
+- Работает с файлами ifc_report.xlsx (лист "Элементы")
+- Использует колонку ExpCheck_MaterialConcrete:MGE_ConcreteGrade для марки бетона (В30, В35, В10, В25)
+- Определяет тип элемента по столбцу Ifc Class
+- Для каждого типа элемента использует соответствующую колонку объема:
+  * IfcWall → Qto_WallBaseQuantities:NetVolume
+  * IfcColumn → Qto_ColumnBaseQuantities:NetVolume
+  * IfcSlab → Qto_SlabBaseQuantities:NetVolume
+  * IfcStair, IfcRamp → только количество (нет объема)
 - Агрегация по полной марке (например, "Бетон В30")
-- Подсчёт количества для элементов без объёма (лестницы, пандусы)
 """
 
 import os
@@ -24,37 +29,55 @@ from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
 
 # Словарь соответствия: Ifc класс -> (столбец_материала, столбец_объёма)
+# Используем точные имена колонок из ifc_report.xlsx
 IFC_MAPPING = {
-    'IfcWall': ('Exp Check_Wall:\\MGE_Material', 'Qto_Wall Base Quantities:\\Net Volume'),
-    'IfcColumn': ('Exp Check_Column:\\MGE_Material', 'Qto_Column Base Quantities:\\Net Volume'),
-    'IfcSlab': ('Exp Check_Slab:\\MGE_Material', 'Qto_Slab Base Quantities:\\Net Volume'),
-    'IfcStair': ('Exp Check_Stair:\\MGE_Material', None),          # нет объёма, только количество
-    'IfcRamp': ('Exp Check_Ramp:\\MGE_Material', None),            # нет объёма, только количество
+    'IfcWall': ('ExpCheck_Wall:MGE_Material', 'Qto_WallBaseQuantities:NetVolume'),
+    'IfcColumn': ('ExpCheck_Column:MGE_Material', 'Qto_ColumnBaseQuantities:NetVolume'),
+    'IfcSlab': ('ExpCheck_Slab:MGE_Material', 'Qto_SlabBaseQuantities:NetVolume'),
+    'IfcStair': ('ExpCheck_Stair:MGE_Material', None),          # нет объёма, только количество
+    'IfcRamp': ('ExpCheck_Ramp:MGE_Material', None),            # нет объёма, только количество
 }
 
-# Регулярное выражение для поиска марки бетона в названии
+# Колонка с маркой бетона (общая для всех типов элементов)
+CONCRETE_GRADE_COLUMN = 'ExpCheck_MaterialConcrete:MGE_ConcreteGrade'
+
+# Регулярное выражение для поиска марки бетона (на случай если нужно будет извлекать из названия)
 # Ищет В30, В35, B30, B35, В40, B40 и т.д. (цифры от 10 до 100)
 GRADE_PATTERN = re.compile(r'[ВB]([1-9]\d?|100)')
 
 
-def extract_material_grade(name: str) -> str:
+def extract_material_grade(name: str, concrete_grade_value: Any) -> str:
     """
-    Извлекает марку бетона из строки наименования элемента.
-    Примеры: "Базовая стена:В30 F150 220мм" -> "В30"
-             "210_Прямоугольного сечения:1200x400 мм B30 F150" -> "B30"
+    Извлекает марку бетона из колонки ExpCheck_MaterialConcrete:MGE_ConcreteGrade.
+    Если значение не указано или равно '0', пытается извлечь из наименования через regex.
+    Примеры: "В30", "В35", "В10", "В25", "B30", "B35"
     Если марка не найдена, возвращает "марка не указана".
+    
+    Args:
+        name: Наименование элемента (для резервного извлечения)
+        concrete_grade_value: Значение из колонки марки бетона
+    
+    Returns:
+        Марка бетона (например, "В30") или "марка не указана"
     """
-    if not isinstance(name, str):
-        return "марка не указана"
-    match = GRADE_PATTERN.search(name)
-    if match:
-        return match.group(0)   # например "В30" или "B30"
+    # Сначала пробуем взять из явной колонки
+    if concrete_grade_value and not pd.isna(concrete_grade_value):
+        grade_str = str(concrete_grade_value).strip()
+        if grade_str and grade_str != '0':
+            return grade_str
+    
+    # Если не удалось, пробуем извлечь из названия
+    if isinstance(name, str):
+        match = GRADE_PATTERN.search(name)
+        if match:
+            return match.group(0)
+    
     return "марка не указана"
 
 
-def find_excel_file_in_specification(session_folder: str) -> Optional[str]:
+def find_ifc_report_file(session_folder: str) -> Optional[str]:
     """
-    Находит Excel файл в папке specification.
+    Находит файл ifc_report.xlsx в папке сессии.
     
     Args:
         session_folder: Путь к папке сессии
@@ -62,27 +85,19 @@ def find_excel_file_in_specification(session_folder: str) -> Optional[str]:
     Returns:
         Путь к Excel файлу или None
     """
-    spec_folder = Path(session_folder) / 'specification'
+    report_path = Path(session_folder) / 'ifc_report.xlsx'
     
-    if not spec_folder.exists():
-        print(f"⚠️  Папка specification не найдена: {spec_folder}")
+    if not report_path.exists():
+        print(f"⚠️  Файл ifc_report.xlsx не найден: {report_path}")
         return None
     
-    # Ищем файлы .xlsx и .xls
-    excel_files = list(spec_folder.glob("*.xlsx")) + list(spec_folder.glob("*.xls"))
-    
-    if not excel_files:
-        print(f"⚠️  Excel файлы не найдены в specification/")
-        return None
-    
-    # Возвращаем первый найденный файл (можно расширить логику выбора)
-    return str(excel_files[0])
+    return str(report_path)
 
 
 def parse_excel_specification(excel_path: str) -> Dict[str, Any]:
     """
-    Парсит Excel файл спецификации, извлекая данные по элементам.
-    Использует жёсткие имена столбцов и правила для каждого Ifc класса.
+    Парсит Excel файл отчета IFC (лист "Элементы"), извлекая данные по элементам.
+    Использует точные имена колонок из ifc_report.xlsx.
     
     Args:
         excel_path: Путь к Excel файлу
@@ -91,23 +106,27 @@ def parse_excel_specification(excel_path: str) -> Dict[str, Any]:
         Словарь с данными: {success, items, total_items}
     """
     
-    print(f"\n📊 Парсинг Excel спецификации: {os.path.basename(excel_path)}")
+    print(f"\n📊 Парсинг Excel отчета IFC: {os.path.basename(excel_path)}")
     
     try:
-        df = pd.read_excel(excel_path, dtype=str)  # читаем всё как строки для надёжности
-        # Нормализуем имена колонок: убираем лишние пробелы, переводим в нижний регистр
+        # Читаем лист "Элементы"
+        df = pd.read_excel(excel_path, sheet_name='Элементы', dtype=str)
+        
+        # Нормализуем имена колонок: убираем лишние пробелы
         df.columns = [str(col).strip() for col in df.columns]
         
-        # Ожидаемые имена колонок (как они выглядят после нормализации)
-        # В исходном файле есть символы : и пробелы, оставляем как есть
-        col_long_name = 'Element Specific:\\Long Name'
+        # Ожидаемые имена колонок
+        col_long_name = 'Element Specific:LongName'
         col_ifc_class = 'Ifc Class'
         
         # Проверяем наличие обязательных колонок
         if col_ifc_class not in df.columns:
-            raise ValueError(f"Столбец '{col_ifc_class}' не найден в файле")
+            raise ValueError(f"Столбец '{col_ifc_class}' не найден в файле. Доступные: {list(df.columns)[:10]}...")
         if col_long_name not in df.columns:
-            raise ValueError(f"Столбец '{col_long_name}' не найден в файле")
+            # Пробуем альтернативное имя
+            col_long_name = 'Element Specific:Name'
+            if col_long_name not in df.columns:
+                raise ValueError(f"Столбец '{col_long_name}' не найден в файле")
         
         items = []
         skipped_rows = 0
@@ -126,21 +145,26 @@ def parse_excel_specification(excel_path: str) -> Dict[str, Any]:
             
             material_col, volume_col = IFC_MAPPING[ifc_class]
             
-            # Проверяем существование колонки материала (должна быть)
-            if material_col not in df.columns:
-                print(f"   ⚠️ Предупреждение: столбец '{material_col}' не найден для {ifc_class}")
-                continue
+            # Получаем марку бетона из общей колонки
+            concrete_grade = row.get(CONCRETE_GRADE_COLUMN)
             
-            material = row.get(material_col)
+            # Получаем наименование элемента
+            long_name = row.get(col_long_name)
+            
+            # Извлекаем марку бетона
+            grade = extract_material_grade(long_name if pd.notna(long_name) else '', concrete_grade)
+            
+            # Получаем базовый материал
+            material = row.get(material_col) if material_col in df.columns else None
             if pd.isna(material) or not material:
-                # Нет материала – пропускаем элемент
-                continue
+                material = "Бетон"  # значение по умолчанию
             material = str(material).strip()
             
-            # Извлекаем марку из длинного имени
-            long_name = row.get(col_long_name)
-            grade = extract_material_grade(long_name) if pd.notna(long_name) else "марка не указана"
-            full_material = f"{material} {grade}" if grade != "марка не указана" else material
+            # Формируем полное название материала с маркой
+            if grade != "марка не указана":
+                full_material = f"{material} {grade}"
+            else:
+                full_material = material
             
             # Объём или количество
             volume = None
@@ -302,6 +326,7 @@ def create_aggregated_excel(aggregated_data: Dict[str, Dict[str, float]], output
 def parse_and_aggregate_specification(session_folder: str) -> Dict[str, Any]:
     """
     Основная функция: поиск, парсинг, агрегация и сохранение.
+    Работает с файлом ifc_report.xlsx в папке сессии.
     
     Args:
         session_folder: Путь к папке сессии
@@ -311,16 +336,16 @@ def parse_and_aggregate_specification(session_folder: str) -> Dict[str, Any]:
     """
     
     print("\n" + "="*60)
-    print("📊 ПАРСИНГ СПЕЦИФИКАЦИИ (УЛУЧШЕННАЯ ВЕРСИЯ)")
+    print("📊 ПАРСИНГ ОТЧЕТА IFC (ifc_report.xlsx)")
     print("="*60)
     
     results = {'success': False, 'excel_file_found': None, 'parsed_items': 0,
                'aggregated_materials': 0, 'output_file': None}
     
-    # Шаг 1: Найти Excel файл
-    excel_path = find_excel_file_in_specification(session_folder)
+    # Шаг 1: Найти файл ifc_report.xlsx
+    excel_path = find_ifc_report_file(session_folder)
     if not excel_path:
-        print("❌ Excel файл спецификации не найден")
+        print("❌ Файл ifc_report.xlsx не найден")
         return results
     results['excel_file_found'] = excel_path
     
@@ -357,7 +382,7 @@ def parse_and_aggregate_specification(session_folder: str) -> Dict[str, Any]:
     
     # Сводка в консоль
     print("\n" + "="*60)
-    print("📊 СВОДКА ПО МАТЕРИАЛАМ (с марками):")
+    print("📊 СВОДКА ПО МАТЕРИАЛАМ (с марками бетона):")
     print("="*60)
     for material, data in sorted(aggregated_data.items()):
         if data['volume'] > 0:
@@ -369,13 +394,13 @@ def parse_and_aggregate_specification(session_folder: str) -> Dict[str, Any]:
 
 def main(session_folder: str):
     """
-    Основная функция парсинга спецификации.
+    Основная функция парсинга отчета IFC.
     
     Args:
         session_folder: Путь к папке сессии
     """
     print("="*60)
-    print("📊 УЛУЧШЕННЫЙ ПАРСИНГ EXCEL СПЕЦИФИКАЦИИ")
+    print("📊 ПАРСИНГ ОТЧЕТА IFC (ifc_report.xlsx)")
     print("="*60)
     print(f"Папка сессии: {session_folder}")
     print("="*60)
@@ -390,7 +415,7 @@ if __name__ == "__main__":
     
     if len(sys.argv) < 2:
         print("Использование: python xlsx_parser.py <session_folder>")
-        print("Пример: python xlsx_parser.py /path/to/uploads/session_id")
+        print("Пример: python xlsx_parser.py /workspace/uploads/session_id")
         sys.exit(1)
     
     session_folder = sys.argv[1]
