@@ -1,8 +1,11 @@
 """
 IFC Parser - Extracts ALL parameters from IFC elements WITHOUT unit conversion and WITHOUT subtracting openings.
 Generates Excel report with TWO sheets:
-  1. "Сводка" - Model info (project name, stories count, building height, address, total elements count)
-  2. "Элементы" - All elements with each parameter in a separate column.
+  1. Summary - Model info (project name, stories count, building height, address, total elements count)
+  2. Elements - All elements with each parameter in a separate column.
+     Format: Columns = "Element Specific:Long Name", "Element Specific:Name", "Ifc Class", 
+             "PSetName:PropertyName" for all properties.
+     Rows = values for each element, plus rows for IfcBuilding and IfcBuildingStorey.
 """
 
 import ifcopenshell
@@ -72,16 +75,40 @@ def get_quantity_value(qty):
         return None
 
 
-def get_element_properties(element, include_type_props=True):
-    """Collect all element parameters (attributes, PropertySet, Quantity, Type) WITHOUT unit conversion."""
-    props = {}
+def get_element_storey(element, ifc_file):
+    """Get the storey/building name that contains this element."""
+    try:
+        inverses = ifc_file.get_inverse(element)
+        for inv in inverses:
+            if inv.is_a() == 'IfcRelContainedInSpatialStructure':
+                relating = getattr(inv, 'RelatingStructure', None)
+                if relating:
+                    return getattr(relating, 'Name', None) or getattr(relating, 'LongName', None)
+    except:
+        pass
+    return None
 
-    # Basic IfcElement attributes
+
+def get_element_properties(element, ifc_file, include_type_props=True):
+    """Collect all element parameters (attributes, PropertySet, Quantity, Type) WITHOUT unit conversion.
+    Returns dict with keys like 'Element Specific:Long Name', 'PSetName:PropertyName', etc.
+    """
+    props = {}
+    
+    # Storey/Building containment
+    storey_name = get_element_storey(element, ifc_file)
+    if storey_name:
+        props['Storey'] = storey_name
+
+    # Basic IfcElement attributes with "Element Specific:" prefix
     base_attrs = ['GlobalId', 'Name', 'Description', 'Tag', 'ObjectType', 'LongName', 'PredefinedType']
     for attr in base_attrs:
         val = getattr(element, attr, None)
         if val is not None:
-            props[attr] = val
+            props[f'Element Specific:{attr}'] = val
+    
+    # IFC Class
+    props['Ifc Class'] = element.is_a()
 
     # Properties and quantities directly attached to element (IsDefinedBy)
     if hasattr(element, 'IsDefinedBy'):
@@ -91,16 +118,22 @@ def get_element_properties(element, include_type_props=True):
                 continue
 
             if prop_def.is_a('IfcPropertySet'):
+                pset_name = getattr(prop_def, 'Name', 'Unknown')
                 for prop in prop_def.HasProperties or []:
                     name = getattr(prop, 'Name', None)
-                    if name and name not in props:
-                        props[name] = get_property_value(prop)
+                    if name:
+                        key = f'{pset_name}:{name}'
+                        if key not in props:
+                            props[key] = get_property_value(prop)
 
             elif prop_def.is_a('IfcElementQuantity'):
+                qty_name = getattr(prop_def, 'Name', 'Unknown')
                 for qty in prop_def.Quantities or []:
                     name = getattr(qty, 'Name', None)
-                    if name and name not in props:
-                        props[name] = get_quantity_value(qty)
+                    if name:
+                        key = f'{qty_name}:{name}'
+                        if key not in props:
+                            props[key] = get_quantity_value(qty)
 
     # Properties from element type (IsTypedBy)
     if include_type_props and hasattr(element, 'IsTypedBy'):
@@ -113,22 +146,28 @@ def get_element_properties(element, include_type_props=True):
             type_attrs = ['GlobalId', 'Name', 'Description', 'ElementType']
             for attr in type_attrs:
                 val = getattr(type_obj, attr, None)
-                if val is not None and attr not in props:
-                    props[attr] = val
+                if val is not None and f'Type:{attr}' not in props:
+                    props[f'Type:{attr}'] = val
 
             # PropertySet and Quantity from type
             if hasattr(type_obj, 'HasPropertySets'):
                 for ps in type_obj.HasPropertySets or []:
                     if ps.is_a('IfcPropertySet'):
+                        pset_name = getattr(ps, 'Name', 'Unknown')
                         for prop in ps.HasProperties or []:
                             name = getattr(prop, 'Name', None)
-                            if name and name not in props:
-                                props[name] = get_property_value(prop)
+                            if name:
+                                key = f'{pset_name}:{name}'
+                                if key not in props:
+                                    props[key] = get_property_value(prop)
                     elif ps.is_a('IfcElementQuantity'):
+                        qty_name = getattr(ps, 'Name', 'Unknown')
                         for qty in ps.Quantities or []:
                             name = getattr(qty, 'Name', None)
-                            if name and name not in props:
-                                props[name] = get_quantity_value(qty)
+                            if name:
+                                key = f'{qty_name}:{name}'
+                                if key not in props:
+                                    props[key] = get_quantity_value(qty)
 
     return props
 
@@ -201,24 +240,47 @@ def get_model_summary(ifc_file):
 # ----------------------------------------------------------------------
 
 def parse_ifc_to_excel(ifc_path, output_excel_path):
-    """Main entry point: reads IFC and saves Excel report with two sheets: Сводка and Элементы."""
+    """Main entry point: reads IFC and saves Excel report with two sheets: Сводка and Элементы.
+    
+    The 'Элементы' sheet has the following format:
+    - Columns: "Element Specific:Long Name", "Element Specific:Name", "Ifc Class", 
+               "Storey", and "PSetName:PropertyName" for all properties.
+    - Rows: One row per element (IfcElement, IfcBuilding, IfcBuildingStorey)
+    - Values are placed in the corresponding column based on the property key.
+    """
     print(f"Opening IFC: {ifc_path}")
     ifc_file = ifcopenshell.open(ifc_path)
 
     # 1. Summary data
     summary = get_model_summary(ifc_file)
 
-    # 2. Collect all IfcElement elements
+    # 2. Collect all elements: IfcElement + IfcBuilding + IfcBuildingStorey
     elements = ifc_file.by_type('IfcElement')
-    print(f"Found elements: {len(elements)}")
+    buildings = ifc_file.by_type('IfcBuilding')
+    storeys = ifc_file.by_type('IfcBuildingStorey')
+    
+    print(f"Found IfcElement: {len(elements)}, IfcBuilding: {len(buildings)}, IfcBuildingStorey: {len(storeys)}")
 
     all_elements_data = []
     all_keys = set()
 
+    # Process IfcBuilding elements first (they appear at top level in user's example)
+    for i, elem in enumerate(buildings):
+        elem_props = get_element_properties(elem, ifc_file, include_type_props=True)
+        all_elements_data.append(elem_props)
+        all_keys.update(elem_props.keys())
+
+    # Process IfcBuildingStorey elements second
+    for i, elem in enumerate(storeys):
+        elem_props = get_element_properties(elem, ifc_file, include_type_props=True)
+        all_elements_data.append(elem_props)
+        all_keys.update(elem_props.keys())
+
+    # Process all other IfcElement elements
     for i, elem in enumerate(elements):
         if i % 500 == 0:
-            print(f"Processing {i} / {len(elements)}")
-        elem_props = get_element_properties(elem, include_type_props=True)
+            print(f"Processing IfcElement {i} / {len(elements)}")
+        elem_props = get_element_properties(elem, ifc_file, include_type_props=True)
         all_elements_data.append(elem_props)
         all_keys.update(elem_props.keys())
 
