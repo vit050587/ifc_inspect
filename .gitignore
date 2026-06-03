@@ -1,24 +1,19 @@
 ```
-# Environment variables
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+
+# Environment
 .env
 .env.local
 *.env.*
 
-# Uploads directory (contains temporary/generated files)
-uploads/
+# Editors
+.vscode/
+.idea/
 
-# Python specific
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-*.so
-*.egg-info/
-.eggs/
 
-# Logs
-*.log
 
 # OS generated files
 .DS_Store
@@ -29,49 +24,5 @@ __pycache__/
 ehthumbs.db
 Thumbs.db
 
-# Backup files
-*~
-*.bak
-*.swp
-*.swo
 
-# IDE specific
-.vscode/
-.idea/
-*.iml
-*.ipr
-*.iws
-
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Testing
-.coverage
-coverage/
-htmlcov/
-.nosetests
-.unit_test_results.xml
-.pytest_cache/
-.mypy_cache/
-
-# Virtual environments
-venv/
-.venv/
-ENV/
-env.bak/
 ```
