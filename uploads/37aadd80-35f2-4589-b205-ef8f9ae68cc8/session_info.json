@@ -1,5 +1,5 @@
 {
-  "session_id": "a3afbe10-7a22-44d7-8428-9e67fa4947a4",
+  "session_id": "37aadd80-35f2-4589-b205-ef8f9ae68cc8",
   "status": "completed",
   "pdf_files": [
     "ВОР КР.pdf",
@@ -26,8 +26,8 @@
       "volume_statement": [
         {
           "filename": "ВОР КР.pdf",
-          "source_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/a3afbe10-7a22-44d7-8428-9e67fa4947a4/pdf_documents/ВОР КР.pdf",
-          "dest_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/a3afbe10-7a22-44d7-8428-9e67fa4947a4/volume_statement/ВОР КР.pdf",
+          "source_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/37aadd80-35f2-4589-b205-ef8f9ae68cc8/pdf_documents/ВОР КР.pdf",
+          "dest_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/37aadd80-35f2-4589-b205-ef8f9ae68cc8/volume_statement/ВОР КР.pdf",
           "category": "volume_statement",
           "pages_analyzed": 3,
           "file_size": 999778
@@ -36,8 +36,8 @@
       "explanatory_note": [
         {
           "filename": "Текстовая и графическая часть КР.pdf",
-          "source_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/a3afbe10-7a22-44d7-8428-9e67fa4947a4/pdf_documents/Текстовая и графическая часть КР.pdf",
-          "dest_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/a3afbe10-7a22-44d7-8428-9e67fa4947a4/explanatory_note/Текстовая и графическая часть КР.pdf",
+          "source_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/37aadd80-35f2-4589-b205-ef8f9ae68cc8/pdf_documents/Текстовая и графическая часть КР.pdf",
+          "dest_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/37aadd80-35f2-4589-b205-ef8f9ae68cc8/explanatory_note/Текстовая и графическая часть КР.pdf",
           "category": "explanatory_note",
           "pages_analyzed": 3,
           "file_size": 10400384
@@ -56,11 +56,11 @@
       "schema": "IFC4",
       "file_size": 14992838,
       "filename": "ifc модель КР.ifc",
-      "filepath": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/a3afbe10-7a22-44d7-8428-9e67fa4947a4/ifc_models/ifc модель КР.ifc",
+      "filepath": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/37aadd80-35f2-4589-b205-ef8f9ae68cc8/ifc_models/ifc модель КР.ifc",
       "geometry_json": "ifc модель КР_geometry.json",
       "has_geometry_json": true,
-      "viewer_url": "/api/viewer/a3afbe10-7a22-44d7-8428-9e67fa4947a4/ifc модель КР.ifc",
-      "viewer_folder": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/a3afbe10-7a22-44d7-8428-9e67fa4947a4/viewer"
+      "viewer_url": "/api/viewer/37aadd80-35f2-4589-b205-ef8f9ae68cc8/ifc модель КР.ifc",
+      "viewer_folder": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/37aadd80-35f2-4589-b205-ef8f9ae68cc8/viewer"
     }
   ],
   "ifc_excel_file": "ifc_report.xlsx",
