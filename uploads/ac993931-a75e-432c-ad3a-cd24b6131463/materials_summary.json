@@ -1,7 +1,7 @@
 {
   "success": true,
   "source_file": "ifc_report.xlsx",
-  "total_items": 10,
+  "total_items": 15,
   "output_excel": "materials_summary.xlsx",
   "items": [
     {
@@ -15,7 +15,7 @@
     {
       "type_ru": "Колонны",
       "ifc_class": "IfcColumn",
-      "material": "Бетон",
+      "material": "Бетон В30",
       "count": 32,
       "volume": 643698.583,
       "area": 1265682.415
@@ -31,7 +31,7 @@
     {
       "type_ru": "Пандусы",
       "ifc_class": "IfcRamp",
-      "material": "Бетон",
+      "material": "Бетон В30",
       "count": 4,
       "volume": "-",
       "area": "-"
@@ -40,9 +40,41 @@
       "type_ru": "Перекрытия",
       "ifc_class": "IfcSlab",
       "material": "Бетон",
-      "count": 119,
-      "volume": 2987992.324,
-      "area": 44171.162
+      "count": 1,
+      "volume": 0.364,
+      "area": 8.449
+    },
+    {
+      "type_ru": "Перекрытия",
+      "ifc_class": "IfcSlab",
+      "material": "Бетон В10",
+      "count": 8,
+      "volume": 66230.083,
+      "area": 5278.995
+    },
+    {
+      "type_ru": "Перекрытия",
+      "ifc_class": "IfcSlab",
+      "material": "Бетон В25",
+      "count": 66,
+      "volume": 2258957.128,
+      "area": 23970.997
+    },
+    {
+      "type_ru": "Перекрытия",
+      "ifc_class": "IfcSlab",
+      "material": "Бетон В30",
+      "count": 21,
+      "volume": 272423.156,
+      "area": 10344.024
+    },
+    {
+      "type_ru": "Перекрытия",
+      "ifc_class": "IfcSlab",
+      "material": "Бетон В35",
+      "count": 23,
+      "volume": 390381.593,
+      "area": 4568.696
     },
     {
       "type_ru": "Перекрытия",
@@ -71,10 +103,18 @@
     {
       "type_ru": "Стены",
       "ifc_class": "IfcWall",
-      "material": "Бетон",
-      "count": 1147,
-      "volume": 2363579.814,
-      "area": 20253.419
+      "material": "Бетон В30",
+      "count": 984,
+      "volume": 1752340.901,
+      "area": 15738.991
+    },
+    {
+      "type_ru": "Стены",
+      "ifc_class": "IfcWall",
+      "material": "Бетон В35",
+      "count": 163,
+      "volume": 611238.913,
+      "area": 4514.428
     },
     {
       "type_ru": "Стены",
