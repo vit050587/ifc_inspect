@@ -1,0 +1,34 @@
+{
+  "session_id": "8c34a8bb-0f36-40e6-80d9-499d0f0f9e7d",
+  "status": "completed",
+  "pdf_files": [],
+  "ifc_files": [
+    "К01_АР_П_R19 (1).ifc"
+  ],
+  "excel_files": [],
+  "other_files": [],
+  "file_organization": {
+    "ifc_count": 1,
+    "excel_count": 0,
+    "pdf_count": 0
+  },
+  "pdf_classification": {
+    "categories": {
+      "volume_statement": 0,
+      "explanatory_note": 0
+    },
+    "files": {
+      "volume_statement": [],
+      "explanatory_note": []
+    }
+  },
+  "drawings_error": "name 'json' is not defined",
+  "results_summary": {
+    "text_pages_count": 0,
+    "drawing_pages_count": 0,
+    "drawings_folder_count": 0,
+    "ifc_processed": false,
+    "pdf_classified": true,
+    "xlsx_parsed": false
+  }
+}
