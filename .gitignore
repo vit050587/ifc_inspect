@@ -5,7 +5,7 @@
 *.env.*
 
 # Uploads directory (contains temporary files)
-uploads/
+#uploads/
 
 # Python cache
 __pycache__/
