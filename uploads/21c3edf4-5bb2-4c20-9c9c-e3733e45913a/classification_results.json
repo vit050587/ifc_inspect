@@ -1,0 +1,14 @@
+{
+  "categories": {
+    "volume_statement": "Ведомость объемов работ и материалов",
+    "explanatory_note": "Текстовая и графическая часть (пояснительная записка)"
+  },
+  "results": {
+    "volume_statement": [],
+    "explanatory_note": []
+  },
+  "summary": {
+    "volume_statement": 0,
+    "explanatory_note": 0
+  }
+}
