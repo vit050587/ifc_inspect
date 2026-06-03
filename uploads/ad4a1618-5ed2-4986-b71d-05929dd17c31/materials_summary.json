@@ -2,7 +2,7 @@
   "success": true,
   "source_file": "ifc_report.xlsx",
   "total_items_parsed": 1432,
-  "total_materials": 6,
+  "total_materials": 5,
   "output_excel": "materials_summary.xlsx",
   "materials": {
     "Бетон В30": {
@@ -14,20 +14,12 @@
       "grade": "В30"
     },
     "Бетон": {
-      "volume": 30.82986857073608,
+      "volume": 133.6045944239141,
       "count": 54,
-      "elements_with_volume": 73,
+      "elements_with_volume": 81,
       "elements_without_volume": 54,
       "base_material": "Бетон",
-      "grade": "марка не указана"
-    },
-    "0": {
-      "volume": 102.77472585317798,
-      "count": 0,
-      "elements_with_volume": 8,
-      "elements_without_volume": 0,
-      "base_material": "0",
-      "grade": "марка не указана"
+      "grade": ""
     },
     "Бетон В10": {
       "volume": 266.5614908434481,
