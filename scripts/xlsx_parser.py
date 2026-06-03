@@ -2,6 +2,7 @@
 """
 Универсальный скрипт парсинга Excel файлов отчетов IFC (ifc_report.xlsx).
 Извлекает ВСЕ материалы из таблицы с их параметрами и единицами измерения.
+Использует LLM-модель gemma4:31b для интеллектуального анализа материалов.
 
 Особенности:
 - Работает с любыми материалами (бетон, гидроизоляция, утеплитель, раствор, арматура и др.)
@@ -9,6 +10,7 @@
 - Группирует данные по полному наименованию материала
 - Считает количество элементов для каждого материала
 - Создает сводную таблицу с агрегированными данными
+- Использует gemma4:31b для классификации материалов и определения единиц измерения
 """
 
 import os
@@ -20,114 +22,202 @@ from collections import defaultdict
 import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+import requests
 
 
-# Mapping для основных типов элементов IFC к их Qto_ префиксам и колонкам объема/площади
-IFC_ELEMENT_MAPPING = {
-    'IfcWall': {'qto_prefix': 'Qto_WallBaseQuantities', 'volume_col': 'NetVolume', 'area_col': 'NetSideArea'},
-    'IfcColumn': {'qto_prefix': 'Qto_ColumnBaseQuantities', 'volume_col': 'NetVolume', 'area_col': None},
-    'IfcSlab': {'qto_prefix': 'Qto_SlabBaseQuantities', 'volume_col': 'NetVolume', 'area_col': 'NetArea'},
-    'IfcStair': {'qto_prefix': 'Qto_StairBaseQuantities', 'volume_col': None, 'area_col': None},
-    'IfcRamp': {'qto_prefix': 'Qto_RampBaseQuantities', 'volume_col': None, 'area_col': None},
-    'IfcBeam': {'qto_prefix': 'Qto_BeamBaseQuantities', 'volume_col': 'NetVolume', 'area_col': None},
-    'IfcFooting': {'qto_prefix': 'Qto_FootingBaseQuantities', 'volume_col': 'NetVolume', 'area_col': None},
-    'IfcPile': {'qto_prefix': 'Qto_PileBaseQuantities', 'volume_col': 'NetVolume', 'area_col': None},
-    'IfcRoof': {'qto_prefix': 'Qto_RoofBaseQuantities', 'volume_col': 'NetVolume', 'area_col': 'NetArea'},
-    'IfcPlate': {'qto_prefix': 'Qto_PlateBaseQuantities', 'volume_col': None, 'area_col': 'NetArea'},
-    'IfcMember': {'qto_prefix': 'Qto_MemberBaseQuantities', 'volume_col': None, 'area_col': None},
-    'IfcCurtainWall': {'qto_prefix': 'Qto_CurtainWallBaseQuantities', 'volume_col': None, 'area_col': 'NetSideArea'},
-    'IfcWindow': {'qto_prefix': 'Qto_WindowBaseQuantities', 'volume_col': None, 'area_col': None},
-    'IfcDoor': {'qto_prefix': 'Qto_DoorBaseQuantities', 'volume_col': None, 'area_col': None},
-    'IfcFurnishingElement': {'qto_prefix': 'Qto_FurnishingElementBaseQuantities', 'volume_col': None, 'area_col': None},
-    'IfcBuildingElementProxy': {'qto_prefix': 'Qto_BuildingElementProxyBaseQuantities', 'volume_col': None, 'area_col': None},
-    'IfcOpeningElement': {'qto_prefix': 'Qto_OpeningElementBaseQuantities', 'volume_col': None, 'area_col': 'Area'},
-    'IfcReinforcingMesh': {'qto_prefix': 'Qto_ReinforcingMeshBaseQuantities', 'volume_col': None, 'area_col': None},
-    'IfcBuildingStorey': {'qto_prefix': 'Qto_BuildingStoreyBaseQuantities', 'volume_col': None, 'area_col': None},
-    'IfcBuilding': {'qto_prefix': 'Qto_BuildingBaseQuantities', 'volume_col': None, 'area_col': None},
-}
-
-# Паттерны для определения типа единицы измерения по названию материала
-UNIT_PATTERNS = {
-    'volume': [
-        r'бетон', r'раствор', r'грунт', r'песок', r'щебень', r'керамзит',
-        r'объем', r'volume', r'куб', r'м3', r'м³'
-    ],
-    'area': [
-        r'гидроизоляц', r'пароизоляц', r'теплоизоляц', r'утеплител',
-        r'мембран', r'пленк', r'покрыт', r'облицовк', r'штукатурк',
-        r'площадь', r'area', r'м2', r'м²', r'квадрат'
-    ],
-    'length': [
-        r'шнур', r'профиль', r'труба', r'кабель', r'провод', r'арматур',
-        r'длина', r'length', r'погонный', r'м\.п\.', r'мп'
-    ],
-    'volume_liquid': [
-        r'праймер', r'мастик', r'клей', r'герметик', r'жидк',
-        r'литр', r'l', r'л\.'
-    ],
-    'pieces': [
-        r'анкер', r'дюбель', r'саморез', r'болт', r'гайка', r'шайба',
-        r'закладн', r'детал', r'элемент', r'издели', r'конструкц',
-        r'сетк', r'каркас', r'штук', r'pcs', r'шт\.'
-    ]
-}
-
-# Словарь соответствия типов материалов для группировки
-MATERIAL_GROUPS = {
-    'Бетон': ['бетон', 'B', 'В'],
-    'Гидроизоляция': ['гидроизоляц', 'мембран', 'техноэласт', 'плантер'],
-    'Утеплитель': ['утеплител', 'полистирол', 'carbon', 'пеноплэкс', 'пенопласт'],
-    'Раствор': ['раствор', 'стяжка', 'М100', 'М150', 'М200'],
-    'Праймер': ['праймер', 'битумный'],
-    'Мастика': ['мастик', 'приклеивающ'],
-    'Арматура': ['арматур', 'сетк', 'каркас', 'reinforc'],
-    'Изоляция': ['пароизоляц', 'теплоизоляц'],
-}
+# URL Ollama API для работы с моделью gemma4:31b
+OLLAMA_API_URL = "http://localhost:11434/api/generate"
+LLM_MODEL = "gemma4:31b"
 
 
-def detect_unit_type(material_name: str, has_volume: bool = False, has_area: bool = False) -> str:
+def call_llm(prompt: str, model: str = LLM_MODEL) -> Optional[str]:
     """
-    Определяет тип единицы измерения для материала по его названию.
+    Вызывает LLM-модель через Ollama API.
+    
+    Args:
+        prompt: Текст запроса к модели
+        model: Название модели
+        
+    Returns:
+        Ответ модели или None при ошибке
+    """
+    try:
+        payload = {
+            "model": model,
+            "prompt": prompt,
+            "stream": False,
+            "options": {
+                "temperature": 0.1,
+                "top_p": 0.9
+            }
+        }
+        
+        response = requests.post(OLLAMA_API_URL, json=payload, timeout=60)
+        
+        if response.status_code == 200:
+            result = response.json()
+            return result.get('response', '').strip()
+        else:
+            print(f"   ⚠️  LLM API error: {response.status_code}")
+            return None
+            
+    except requests.exceptions.ConnectionError:
+        print(f"   ⚠️  Не удалось подключиться к Ollama API ({OLLAMA_API_URL})")
+        return None
+    except Exception as e:
+        print(f"   ⚠️  Ошибка при вызове LLM: {e}")
+        return None
+
+
+def analyze_material_with_llm(material_name: str) -> Dict[str, Any]:
+    """
+    Анализирует материал с помощью LLM gemma4:31b для определения:
+    - Типа единицы измерения (volume/area/length/pieces/volume_liquid)
+    - Группы материала (Бетон, Гидроизоляция, Утеплитель и т.д.)
     
     Args:
         material_name: Название материала
-        has_volume: Есть ли колонка объема для этого элемента
-        has_area: Есть ли колонка площади для этого элемента
         
     Returns:
-        Тип единицы: 'volume' (м³), 'area' (м²), 'length' (м), 
-                     'volume_liquid' (л), 'pieces' (шт)
+        Словарь с результатами анализа
     """
+    # Паттерны для определения типа единицы измерения по названию материала (fallback)
+    unit_patterns = {
+        'volume': [
+            r'бетон', r'раствор', r'грунт', r'песок', r'щебень', r'керамзит',
+            r'объем', r'volume', r'куб', r'м3', r'м³'
+        ],
+        'area': [
+            r'гидроизоляц', r'пароизоляц', r'теплоизоляц', r'утеплител',
+            r'мембран', r'пленк', r'покрыт', r'облицовк', r'штукатурк',
+            r'площадь', r'area', r'м2', r'м²', r'квадрат'
+        ],
+        'length': [
+            r'шнур', r'профиль', r'труба', r'кабель', r'провод', r'арматур',
+            r'длина', r'length', r'погонный', r'м\.п\.', r'мп'
+        ],
+        'volume_liquid': [
+            r'праймер', r'мастик', r'клей', r'герметик', r'жидк',
+            r'литр', r'l', r'л\.'
+        ],
+        'pieces': [
+            r'анкер', r'дюбель', r'саморез', r'болт', r'гайка', r'шайба',
+            r'закладн', r'детал', r'элемент', r'издели', r'конструкц',
+            r'сетк', r'каркас', r'штук', r'pcs', r'шт\.'
+        ]
+    }
+    
+    # Словарь соответствия типов материалов для группировки (fallback)
+    material_groups = {
+        'Бетон': ['бетон', 'B', 'В'],
+        'Гидроизоляция': ['гидроизоляц', 'мембран', 'техноэласт', 'плантер'],
+        'Утеплитель': ['утеплител', 'полистирол', 'carbon', 'пеноплэкс', 'пенопласт'],
+        'Раствор': ['раствор', 'стяжка', 'М100', 'М150', 'М200'],
+        'Праймер': ['праймер', 'битумный'],
+        'Мастика': ['мастик', 'приклеивающ'],
+        'Арматура': ['арматур', 'сетк', 'каркас', 'reinforc'],
+        'Изоляция': ['пароизоляц', 'теплоизоляц'],
+    }
+    
+    prompt = f"""Проанализируй строительный материал и определи его характеристики.
+
+Материал: "{material_name}"
+
+Ответь ТОЛЬКО в формате JSON без дополнительных пояснений:
+{{
+    "unit_type": "volume" или "area" или "length" или "pieces" или "volume_liquid",
+    "unit_label": "м³" или "м²" или "м" или "шт" или "л",
+    "material_group": "Бетон" или "Гидроизоляция" или "Утеплитель" или "Раствор" или "Арматура" или "Праймер" или "Мастика" или "Изоляция" или "Другой"
+}}
+
+Правила:
+- volume (м³): бетон, раствор, грунт, песок, щебень, керамзит
+- area (м²): гидроизоляция, пароизоляция, теплоизоляция, утеплитель, мембрана, пленка, покрытие, облицовка, штукатурка
+- length (м): шнур, профиль, труба, кабель, провод, арматура (погонные метры)
+- pieces (шт): анкер, дюбель, саморез, болт, гайка, шайба, закладная деталь, элемент, изделие, конструкция, сетка, каркас
+- volume_liquid (л): праймер, мастика, клей, герметик, жидкость
+"""
+
+    response = call_llm(prompt)
+    
+    # Если LLM вернул результат, парсим его
+    if response:
+        try:
+            # Пытаемся найти JSON в ответе
+            json_match = re.search(r'\{[^{}]*\}', response, re.DOTALL)
+            if json_match:
+                result = json.loads(json_match.group())
+                return {
+                    "unit_type": result.get("unit_type", "pieces"),
+                    "unit_label": result.get("unit_label", "шт"),
+                    "material_group": result.get("material_group", "Другой")
+                }
+        except (json.JSONDecodeError, AttributeError):
+            pass
+    
+    # Fallback: используем паттерны если LLM недоступен или не вернул результат
     name_lower = material_name.lower()
     
-    # Сначала проверяем по паттернам названия
-    for unit_type, patterns in UNIT_PATTERNS.items():
+    # Определяем тип единицы измерения по паттернам
+    unit_type = 'pieces'
+    for utype, patterns in unit_patterns.items():
         for pattern in patterns:
             if re.search(pattern, name_lower):
-                return unit_type
+                unit_type = utype
+                break
+        if unit_type != 'pieces':
+            break
     
-    # Если не нашли по паттернам, используем доступные метрики
-    if has_volume:
-        return 'volume'
-    if has_area:
-        return 'area'
+    # Определяем группу материала по паттернам
+    material_group = "Другой"
+    for group, keywords in material_groups.items():
+        for keyword in keywords:
+            if keyword.lower() in name_lower:
+                material_group = group
+                break
+        if material_group != "Другой":
+            break
     
-    # По умолчанию считаем что это штуки (для поштучных элементов)
-    return 'pieces'
-
-
-def get_unit_label(unit_type: str) -> str:
-    """
-    Возвращает текстовое обозначение единицы измерения.
-    """
-    labels = {
+    # Определяем label единицы измерения
+    unit_labels = {
         'volume': 'м³',
         'area': 'м²',
         'length': 'м',
         'volume_liquid': 'л',
         'pieces': 'шт'
     }
-    return labels.get(unit_type, 'шт')
+    unit_label = unit_labels.get(unit_type, 'шт')
+    
+    return {
+        "unit_type": unit_type,
+        "unit_label": unit_label,
+        "material_group": material_group
+    }
+
+
+# Mapping для основных типов элементов IFC к их Qto_ префиксам и колонкам объема/площади
+IFC_ELEMENT_MAPPING = {
+    'IfcWall': {'qto_prefix': 'Qto_WallBaseQuantities', 'volume_col': 'NetVolume', 'area_col': 'NetSideArea', 'length_col': 'Length'},
+    'IfcColumn': {'qto_prefix': 'Qto_ColumnBaseQuantities', 'volume_col': 'NetVolume', 'area_col': 'OuterSurfaceArea', 'length_col': 'Length'},
+    'IfcSlab': {'qto_prefix': 'Qto_SlabBaseQuantities', 'volume_col': 'NetVolume', 'area_col': 'NetArea', 'length_col': None},
+    'IfcStair': {'qto_prefix': 'Qto_StairBaseQuantities', 'volume_col': None, 'area_col': None, 'length_col': None},
+    'IfcRamp': {'qto_prefix': 'Qto_RampBaseQuantities', 'volume_col': None, 'area_col': None, 'length_col': None},
+    'IfcBeam': {'qto_prefix': 'Qto_BeamBaseQuantities', 'volume_col': 'NetVolume', 'area_col': None, 'length_col': None},
+    'IfcFooting': {'qto_prefix': 'Qto_FootingBaseQuantities', 'volume_col': 'NetVolume', 'area_col': None, 'length_col': None},
+    'IfcPile': {'qto_prefix': 'Qto_PileBaseQuantities', 'volume_col': 'NetVolume', 'area_col': None, 'length_col': None},
+    'IfcRoof': {'qto_prefix': 'Qto_RoofBaseQuantities', 'volume_col': 'NetVolume', 'area_col': 'NetArea', 'length_col': None},
+    'IfcPlate': {'qto_prefix': 'Qto_PlateBaseQuantities', 'volume_col': None, 'area_col': 'NetArea', 'length_col': None},
+    'IfcMember': {'qto_prefix': 'Qto_MemberBaseQuantities', 'volume_col': None, 'area_col': None, 'length_col': None},
+    'IfcCurtainWall': {'qto_prefix': 'Qto_CurtainWallBaseQuantities', 'volume_col': None, 'area_col': 'NetSideArea', 'length_col': None},
+    'IfcWindow': {'qto_prefix': 'Qto_WindowBaseQuantities', 'volume_col': None, 'area_col': None, 'length_col': None},
+    'IfcDoor': {'qto_prefix': 'Qto_DoorBaseQuantities', 'volume_col': None, 'area_col': None, 'length_col': None},
+    'IfcFurnishingElement': {'qto_prefix': 'Qto_FurnishingElementBaseQuantities', 'volume_col': None, 'area_col': None, 'length_col': None},
+    'IfcBuildingElementProxy': {'qto_prefix': 'Qto_BuildingElementProxyBaseQuantities', 'volume_col': None, 'area_col': None, 'length_col': None},
+    'IfcOpeningElement': {'qto_prefix': 'Qto_OpeningElementBaseQuantities', 'volume_col': None, 'area_col': 'Area', 'length_col': None},
+    'IfcReinforcingMesh': {'qto_prefix': 'Qto_ReinforcingMeshBaseQuantities', 'volume_col': None, 'area_col': None, 'length_col': None},
+    'IfcBuildingStorey': {'qto_prefix': 'Qto_BuildingStoreyBaseQuantities', 'volume_col': None, 'area_col': None, 'length_col': None},
+    'IfcBuilding': {'qto_prefix': 'Qto_BuildingBaseQuantities', 'volume_col': None, 'area_col': None, 'length_col': None},
+}
 
 
 def find_ifc_report_file(session_folder: str) -> Optional[str]:
@@ -145,9 +235,11 @@ def parse_excel_specification(excel_path: str) -> Dict[str, Any]:
     """
     Универсальный парсер Excel файла отчета IFC (лист "Элементы").
     Извлекает ВСЕ материалы из таблицы с их значениями и единицами измерения.
+    Использует LLM gemma4:31b для анализа материалов.
     """
     
     print(f"\n📊 Парсинг Excel отчета IFC: {os.path.basename(excel_path)}")
+    print("   🤖 Используем модель gemma4:31b для анализа материалов...")
     
     try:
         # Читаем лист "Элементы"
@@ -171,6 +263,7 @@ def parse_excel_specification(excel_path: str) -> Dict[str, Any]:
         
         items = []
         skipped_rows = 0
+        llm_cache = {}  # Кэш для результатов LLM
         
         for idx, row in df.iterrows():
             ifc_class = row.get(col_ifc_class)
@@ -199,10 +292,12 @@ def parse_excel_specification(excel_path: str) -> Dict[str, Any]:
             qto_prefix = element_config['qto_prefix']
             volume_col_name = f"{qto_prefix}:{element_config.get('volume_col')}" if element_config.get('volume_col') else None
             area_col_name = f"{qto_prefix}:{element_config.get('area_col')}" if element_config.get('area_col') else None
+            length_col_name = f"{qto_prefix}:{element_config.get('length_col')}" if element_config.get('length_col') else None
             
-            # Получаем значения объема и площади
+            # Получаем значения объема, площади и длины
             volume_value = None
             area_value = None
+            length_value = None
             
             if volume_col_name and volume_col_name in df.columns:
                 vol_val = row.get(volume_col_name)
@@ -217,6 +312,14 @@ def parse_excel_specification(excel_path: str) -> Dict[str, Any]:
                 if area_val and str(area_val) != '0' and str(area_val) != 'nan':
                     try:
                         area_value = float(str(area_val).replace(',', '.'))
+                    except (ValueError, TypeError):
+                        pass
+            
+            if length_col_name and length_col_name in df.columns:
+                len_val = row.get(length_col_name)
+                if len_val and str(len_val) != '0' and str(len_val) != 'nan':
+                    try:
+                        length_value = float(str(len_val).replace(',', '.'))
                     except (ValueError, TypeError):
                         pass
             
@@ -236,46 +339,58 @@ def parse_excel_specification(excel_path: str) -> Dict[str, Any]:
             else:
                 full_material = base_material
             
-            # Определяем группу материала
-            material_group = "Другой"
-            for group, keywords in MATERIAL_GROUPS.items():
-                for keyword in keywords:
-                    if keyword.lower() in full_material.lower():
-                        material_group = group
-                        break
-                if material_group != "Другой":
-                    break
+            # Используем LLM для анализа материала (с кэшированием)
+            if full_material not in llm_cache:
+                llm_result = analyze_material_with_llm(full_material)
+                llm_cache[full_material] = llm_result
+            else:
+                llm_result = llm_cache[full_material]
+            
+            material_group = llm_result['material_group']
+            unit_type = llm_result['unit_type']
+            unit_label = llm_result['unit_label']
             
             # Добавляем запись с объемом (если есть)
             if volume_value is not None and volume_value > 0:
-                unit_type = detect_unit_type(full_material, has_volume=True, has_area=False)
                 items.append({
                     'ifc_class': ifc_class,
                     'element_name': long_name,
                     'material_full': full_material,
                     'material_group': material_group,
-                    'unit_type': unit_type,
-                    'unit_label': get_unit_label(unit_type),
+                    'unit_type': 'volume',
+                    'unit_label': 'м³',
                     'value': volume_value,
                     'metric_type': 'volume'
                 })
             
             # Добавляем запись с площадью (если есть)
             if area_value is not None and area_value > 0:
-                unit_type = detect_unit_type(full_material, has_volume=False, has_area=True)
                 items.append({
                     'ifc_class': ifc_class,
                     'element_name': long_name,
                     'material_full': full_material,
                     'material_group': material_group,
-                    'unit_type': unit_type,
-                    'unit_label': get_unit_label(unit_type),
+                    'unit_type': 'area',
+                    'unit_label': 'м²',
                     'value': area_value,
                     'metric_type': 'area'
                 })
             
-            # Если нет ни объема ни площади - добавляем как штуку
-            if volume_value is None and area_value is None:
+            # Добавляем запись с длиной (если есть)
+            if length_value is not None and length_value > 0:
+                items.append({
+                    'ifc_class': ifc_class,
+                    'element_name': long_name,
+                    'material_full': full_material,
+                    'material_group': material_group,
+                    'unit_type': 'length',
+                    'unit_label': 'м',
+                    'value': length_value,
+                    'metric_type': 'length'
+                })
+            
+            # Если нет ни объема ни площади ни длины - добавляем как штуку
+            if volume_value is None and area_value is None and length_value is None:
                 items.append({
                     'ifc_class': ifc_class,
                     'element_name': long_name,
@@ -288,6 +403,7 @@ def parse_excel_specification(excel_path: str) -> Dict[str, Any]:
                 })
         
         print(f"   ✅ Извлечено {len(items)} записей о материалах (пропущено {skipped_rows} нерелевантных строк)")
+        print(f"   🧠 Проанализировано {len(llm_cache)} уникальных материалов через LLM")
         
         return {
             'success': True,
