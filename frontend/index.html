@@ -542,12 +542,12 @@
                             <table class="pages-table">
                                 <thead>
                                     <tr>
+                                        <th>Тип (RU)</th>
+                                        <th>Тип элемента</th>
                                         <th>Материал</th>
-                                        <th>Группа</th>
-                                        <th>Ед. изм.</th>
-                                        <th>Общее количество</th>
-                                        <th>Кол-во элементов</th>
-                                        <th>Примеры элементов</th>
+                                        <th>Количество, шт</th>
+                                        <th>Объем, м³</th>
+                                        <th>Площадь, м²</th>
                                     </tr>
                                 </thead>
                                 <tbody id="materialsTableBody">
@@ -1362,15 +1362,18 @@
                 const materialsData = await materialsResponse.json();
                 const rows = materialsData.data || [];
                 
-                rows.forEach(row => {
+                rows.forEach((row, index) => {
+                    // Skip header row (index 0)
+                    if (index === 0) return;
+                    
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
+                        <td>${row[0] || ''}</td>
                         <td>${row[1] || ''}</td>
                         <td>${row[2] || ''}</td>
                         <td>${row[3] || ''}</td>
                         <td>${row[4] || ''}</td>
                         <td>${row[5] || ''}</td>
-                        <td>${row[6] || ''}</td>
                     `;
                     tbody.appendChild(tr);
                 });
