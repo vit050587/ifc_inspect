@@ -506,20 +506,32 @@
                 <div class="response-content">
                     <div class="results-grid">
                         <div class="result-card">
-                            <h3>Текстовых страниц</h3>
+                            <h3>Файлов в пояснительной записке</h3>
                             <div class="value" id="textPagesCount">0</div>
                         </div>
                         <div class="result-card">
-                            <h3>Страниц с чертежами</h3>
+                            <h3>Файлов с чертежами</h3>
                             <div class="value" id="drawingPagesCount">0</div>
                         </div>
                         <div class="result-card">
-                            <h3>Элементов в IFC</h3>
+                            <h3>Количество элементов</h3>
                             <div class="value" id="ifcElementsCount">0</div>
                         </div>
                         <div class="result-card">
                             <h3>Материалов</h3>
                             <div class="value" id="materialsCount">0</div>
+                        </div>
+                        <div class="result-card">
+                            <h3>Количество этажей</h3>
+                            <div class="value" id="storiesCount">0</div>
+                        </div>
+                        <div class="result-card">
+                            <h3>Высота здания</h3>
+                            <div class="value" id="buildingHeight">0</div>
+                        </div>
+                        <div class="result-card" style="grid-column: 1 / -1;">
+                            <h3>LongName (ИМЯ)</h3>
+                            <div class="value" id="longName" style="font-size: 16px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">-</div>
                         </div>
                     </div>
                     
@@ -533,6 +545,40 @@
                         <button class="download-btn" id="downloadExcelBtn" onclick="downloadExcel()">
                             📥 Скачать Excel отчет
                         </button>
+                    </div>
+                    
+                    <!-- Download Materials Summary Section -->
+                    <div class="download-section" id="downloadMaterialsSection" style="display: none;">
+                        <h3 style="margin-bottom: 15px; color: #2c3e50;">📋 Сводка по материалам</h3>
+                        <p style="margin-bottom: 20px; color: #7f8c8d;">
+                            Таблица Excel содержит агрегированную информацию по материалам:
+                            марки бетона, объёмы, количество элементов.
+                        </p>
+                        <button class="download-btn" id="downloadMaterialsBtn" onclick="downloadMaterials()" style="background: #3498db;">
+                            📥 Скачать сводку материалов
+                        </button>
+                    </div>
+                    
+                    <!-- Materials Summary Table Preview -->
+                    <div class="pages-info" id="materialsTableSection" style="display: none;">
+                        <h3 style="margin: 20px 0 15px; color: #2c3e50;">📊 Просмотр сводки материалов</h3>
+                        <div style="overflow-x: auto; max-height: 400px; overflow-y: auto;">
+                            <table class="pages-table">
+                                <thead>
+                                    <tr>
+                                        <th>№</th>
+                                        <th>Материал (с маркой)</th>
+                                        <th>Базовая марка</th>
+                                        <th>Марка бетона</th>
+                                        <th>Общий объём (м³)</th>
+                                        <th>Кол-во элементов</th>
+                                        <th>Количество (шт)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="materialsTableBody">
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                     
                     <!-- Pages Info Table -->
@@ -785,10 +831,12 @@
         function displayResults(data) {
             const resultsSection = document.getElementById('resultsSection');
             const downloadSection = document.getElementById('downloadSection');
+            const downloadMaterialsSection = document.getElementById('downloadMaterialsSection');
+            const materialsTableSection = document.getElementById('materialsTableSection');
             const pagesInfo = document.getElementById('pagesInfo');
             const ifcViewerSection = document.getElementById('ifcViewerSection');
             
-            // Update counters
+            // Update counters - text and drawing pages from folders
             document.getElementById('textPagesCount').textContent = data.text_pages_count || 0;
             document.getElementById('drawingPagesCount').textContent = data.drawing_pages_count || 0;
             
@@ -800,7 +848,30 @@
                         if (resultsData.results && resultsData.results.ifc_results) {
                             const ifcResults = resultsData.results.ifc_results;
                             document.getElementById('ifcElementsCount').textContent = ifcResults.total_elements || 0;
-                            document.getElementById('materialsCount').textContent = ifcResults.materials_count || 0;
+                            
+                            // Get materials count from xlsx_parser_results
+                            const xlsxResults = resultsData.results.xlsx_parser_results;
+                            if (xlsxResults && xlsxResults.success) {
+                                document.getElementById('materialsCount').textContent = xlsxResults.aggregated_materials || 0;
+                            } else {
+                                document.getElementById('materialsCount').textContent = ifcResults.materials_count || 0;
+                            }
+                            
+                            // Get project info for stories, height, longName
+                            const projectInfo = ifcResults.project_info;
+                            if (projectInfo) {
+                                // Find stories count from the summary sheet
+                                const storiesCount = ifcResults.stories_count || 0;
+                                document.getElementById('storiesCount').textContent = storiesCount;
+                                
+                                // Get building height - need to fetch from Excel
+                                if (projectInfo.LongName) {
+                                    document.getElementById('longName').textContent = projectInfo.LongName;
+                                }
+                                
+                                // Fetch building height from Excel summary
+                                fetchBuildingHeight();
+                            }
                         }
                         
                         // Load IFC viewer info (but don't display it yet as per requirements)
@@ -809,17 +880,23 @@
                             // IFC viewer is prepared but not displayed on the interface
                             console.log('IFC viewer info loaded:', ifcViewerInfo);
                         }
+                        
+                        // Load materials summary table
+                        loadMaterialsTable();
                     })
                     .catch(err => console.error('Error loading detailed results:', err));
             }
             
-            // Show download button for materials Excel if available
-            if (data.materials_excel_file) {
-                ifcExcelFile = data.materials_excel_file;
-                downloadSection.style.display = 'block';
-            } else if (data.ifc_processed && data.ifc_excel_file) {
+            // Show download button for IFC Excel report
+            if (data.ifc_processed && data.ifc_excel_file) {
                 ifcExcelFile = data.ifc_excel_file;
                 downloadSection.style.display = 'block';
+            }
+            
+            // Show download button for materials summary Excel
+            if (data.materials_excel_file) {
+                downloadMaterialsSection.style.display = 'block';
+                materialsTableSection.style.display = 'block';
             }
             
             // Show pages info table
@@ -1313,6 +1390,72 @@
             } catch (error) {
                 console.error('Error loading pages table:', error);
             }
+        }
+        
+        async function loadMaterialsTable() {
+            try {
+                const response = await fetch(`/api/results/${sessionId}`);
+                const data = await response.json();
+                
+                const tbody = document.getElementById('materialsTableBody');
+                tbody.innerHTML = '';
+                
+                // Load materials summary from Excel file
+                if (!sessionId) return;
+                
+                // Fetch materials summary data from backend
+                const materialsResponse = await fetch(`/api/materials-summary/${sessionId}`);
+                if (!materialsResponse.ok) return;
+                
+                const materialsData = await materialsResponse.json();
+                const rows = materialsData.data || [];
+                
+                rows.forEach(row => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${row[0] || ''}</td>
+                        <td>${row[1] || ''}</td>
+                        <td>${row[2] || ''}</td>
+                        <td>${row[3] || ''}</td>
+                        <td>${row[4] || ''}</td>
+                        <td>${row[5] || ''}</td>
+                        <td>${row[6] || ''}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (error) {
+                console.error('Error loading materials table:', error);
+            }
+        }
+        
+        async function fetchBuildingHeight() {
+            try {
+                const response = await fetch(`/api/building-height/${sessionId}`);
+                if (!response.ok) return;
+                
+                const data = await response.json();
+                if (data.height !== undefined) {
+                    // Convert to meters if in mm (values > 1000 are likely mm)
+                    let heightValue = data.height;
+                    if (heightValue > 1000) {
+                        heightValue = (heightValue / 1000).toFixed(2) + ' м';
+                    } else {
+                        heightValue = heightValue + ' м';
+                    }
+                    document.getElementById('buildingHeight').textContent = heightValue;
+                }
+            } catch (error) {
+                console.error('Error fetching building height:', error);
+            }
+        }
+        
+        function downloadMaterials() {
+            if (!sessionId) {
+                showError('Сессия не найдена');
+                return;
+            }
+            
+            window.location.href = `/api/download/${sessionId}/materials_summary.xlsx`;
         }
         
         function downloadExcel() {
