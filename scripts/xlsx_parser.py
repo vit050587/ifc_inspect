@@ -1,25 +1,14 @@
 #!/usr/bin/env python3
 """
-Скрипт парсинга Excel файлов отчетов IFC (ifc_report.xlsx).
-Универсальный парсер для ЛЮБЫХ материалов из таблицы.
-
-Извлекает все материалы и их подвиды из таблицы:
-- Бетон и его марки (В30, В35, В10, В25)
-- Гидроизоляцию (мембраны, мастики, праймеры)
-- Утеплители (полистирол, CARBON PROF и др.)
-- Растворы (стяжка М100 и др.)
-- Арматуру и другие материалы
+Универсальный скрипт парсинга Excel файлов отчетов IFC (ifc_report.xlsx).
+Извлекает ВСЕ материалы из таблицы с их параметрами и единицами измерения.
 
 Особенности:
-- Работает с файлами ifc_report.xlsx (лист "Элементы")
-- Автоматически находит ВСЕ колонки с материалами по паттернам имен
-- Извлекает материал из:
-  * Явных колонок MGE_Material (базовый материал элемента)
-  * Колонок MGE_ConcreteGrade (марка бетона)
-  * Колонок Qto_* с названиями материалов (например "02_Бетон B30...", "30_Гидроизоляция...")
-- Определяет тип элемента по столбцу Ifc Class
-- Для каждого типа элемента использует соответствующую колонку объема
-- Агрегация по полному наименованию материала с маркой/подвидом
+- Работает с любыми материалами (бетон, гидроизоляция, утеплитель, раствор, арматура и др.)
+- Автоматически определяет тип единицы измерения (объем м³, площадь м², штуки, литры)
+- Группирует данные по полному наименованию материала
+- Считает количество элементов для каждого материала
+- Создает сводную таблицу с агрегированными данными
 """
 
 import os
@@ -27,153 +16,122 @@ import re
 import json
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
+from collections import defaultdict
 import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
 
-# Словарь соответствия: Ifc класс -> (столбец_материала, столбец_объёма)
-IFC_MAPPING = {
-    'IfcWall': ('ExpCheck_Wall:MGE_Material', 'Qto_WallBaseQuantities:NetVolume'),
-    'IfcColumn': ('ExpCheck_Column:MGE_Material', 'Qto_ColumnBaseQuantities:NetVolume'),
-    'IfcSlab': ('ExpCheck_Slab:MGE_Material', 'Qto_SlabBaseQuantities:NetVolume'),
-    'IfcStair': ('ExpCheck_Stair:MGE_Material', None),          # нет объёма, только количество
-    'IfcRamp': ('ExpCheck_Ramp:MGE_Material', None),            # нет объёма, только количество
+# Mapping для основных типов элементов IFC к их Qto_ префиксам и колонкам объема/площади
+IFC_ELEMENT_MAPPING = {
+    'IfcWall': {'qto_prefix': 'Qto_WallBaseQuantities', 'volume_col': 'NetVolume', 'area_col': 'NetSideArea'},
+    'IfcColumn': {'qto_prefix': 'Qto_ColumnBaseQuantities', 'volume_col': 'NetVolume', 'area_col': None},
+    'IfcSlab': {'qto_prefix': 'Qto_SlabBaseQuantities', 'volume_col': 'NetVolume', 'area_col': 'NetArea'},
+    'IfcStair': {'qto_prefix': 'Qto_StairBaseQuantities', 'volume_col': None, 'area_col': None},
+    'IfcRamp': {'qto_prefix': 'Qto_RampBaseQuantities', 'volume_col': None, 'area_col': None},
+    'IfcBeam': {'qto_prefix': 'Qto_BeamBaseQuantities', 'volume_col': 'NetVolume', 'area_col': None},
+    'IfcFooting': {'qto_prefix': 'Qto_FootingBaseQuantities', 'volume_col': 'NetVolume', 'area_col': None},
+    'IfcPile': {'qto_prefix': 'Qto_PileBaseQuantities', 'volume_col': 'NetVolume', 'area_col': None},
+    'IfcRoof': {'qto_prefix': 'Qto_RoofBaseQuantities', 'volume_col': 'NetVolume', 'area_col': 'NetArea'},
+    'IfcPlate': {'qto_prefix': 'Qto_PlateBaseQuantities', 'volume_col': None, 'area_col': 'NetArea'},
+    'IfcMember': {'qto_prefix': 'Qto_MemberBaseQuantities', 'volume_col': None, 'area_col': None},
+    'IfcCurtainWall': {'qto_prefix': 'Qto_CurtainWallBaseQuantities', 'volume_col': None, 'area_col': 'NetSideArea'},
+    'IfcWindow': {'qto_prefix': 'Qto_WindowBaseQuantities', 'volume_col': None, 'area_col': None},
+    'IfcDoor': {'qto_prefix': 'Qto_DoorBaseQuantities', 'volume_col': None, 'area_col': None},
+    'IfcFurnishingElement': {'qto_prefix': 'Qto_FurnishingElementBaseQuantities', 'volume_col': None, 'area_col': None},
+    'IfcBuildingElementProxy': {'qto_prefix': 'Qto_BuildingElementProxyBaseQuantities', 'volume_col': None, 'area_col': None},
+    'IfcOpeningElement': {'qto_prefix': 'Qto_OpeningElementBaseQuantities', 'volume_col': None, 'area_col': 'Area'},
+    'IfcReinforcingMesh': {'qto_prefix': 'Qto_ReinforcingMeshBaseQuantities', 'volume_col': None, 'area_col': None},
+    'IfcBuildingStorey': {'qto_prefix': 'Qto_BuildingStoreyBaseQuantities', 'volume_col': None, 'area_col': None},
+    'IfcBuilding': {'qto_prefix': 'Qto_BuildingBaseQuantities', 'volume_col': None, 'area_col': None},
 }
 
-# Колонка с маркой бетона (общая для всех типов элементов)
-CONCRETE_GRADE_COLUMN = 'ExpCheck_MaterialConcrete:MGE_ConcreteGrade'
+# Паттерны для определения типа единицы измерения по названию материала
+UNIT_PATTERNS = {
+    'volume': [
+        r'бетон', r'раствор', r'грунт', r'песок', r'щебень', r'керамзит',
+        r'объем', r'volume', r'куб', r'м3', r'м³'
+    ],
+    'area': [
+        r'гидроизоляц', r'пароизоляц', r'теплоизоляц', r'утеплител',
+        r'мембран', r'пленк', r'покрыт', r'облицовк', r'штукатурк',
+        r'площадь', r'area', r'м2', r'м²', r'квадрат'
+    ],
+    'length': [
+        r'шнур', r'профиль', r'труба', r'кабель', r'провод', r'арматур',
+        r'длина', r'length', r'погонный', r'м\.п\.', r'мп'
+    ],
+    'volume_liquid': [
+        r'праймер', r'мастик', r'клей', r'герметик', r'жидк',
+        r'литр', r'l', r'л\.'
+    ],
+    'pieces': [
+        r'анкер', r'дюбель', r'саморез', r'болт', r'гайка', r'шайба',
+        r'закладн', r'детал', r'элемент', r'издели', r'конструкц',
+        r'сетк', r'каркас', r'штук', r'pcs', r'шт\.'
+    ]
+}
 
-# Паттерны для поиска колонок с материалами в Qto_* колонках
-# Ищем колонки вида: Qto_*:XX_Название материала...
-MATERIAL_COLUMN_PATTERN = re.compile(r'^Qto_.*:\d+_[А-Яа-яA-Za-z\s\d\-\(\)]+')
-
-# Паттерн для извлечения названия материала из имени колонки
-# Например: "02_Бетон B30 W6 F150 Гравий" → "Бетон B30 W6 F150 Гравий"
-MATERIAL_NAME_PATTERN = re.compile(r'^\d+_(.+)$')
-
-# Регулярное выражение для поиска марки бетона (В30, В35, B30, B35 и т.д.)
-GRADE_PATTERN = re.compile(r'[ВB]([1-9]\d?|100)')
-
-# Список ключевых слов для определения типа материала
-MATERIAL_TYPES = {
-    'бетон': 'Бетон',
-    'гидроизоляц': 'Гидроизоляция',
-    'утеплител': 'Утеплитель',
-    'раствор': 'Раствор',
-    'мастик': 'Мастика',
-    'праймер': 'Праймер',
-    'мембран': 'Мембрана',
-    'полистирол': 'Полистирол',
-    'carbon': 'CARBON',
-    'техноэласт': 'Техноэласт',
-    'гравий': 'Гравий',
-    'гранит': 'Гранит',
-    'арматур': 'Арматура',
-    'reinforc': 'Армирование',
+# Словарь соответствия типов материалов для группировки
+MATERIAL_GROUPS = {
+    'Бетон': ['бетон', 'B', 'В'],
+    'Гидроизоляция': ['гидроизоляц', 'мембран', 'техноэласт', 'плантер'],
+    'Утеплитель': ['утеплител', 'полистирол', 'carbon', 'пеноплэкс', 'пенопласт'],
+    'Раствор': ['раствор', 'стяжка', 'М100', 'М150', 'М200'],
+    'Праймер': ['праймер', 'битумный'],
+    'Мастика': ['мастик', 'приклеивающ'],
+    'Арматура': ['арматур', 'сетк', 'каркас', 'reinforc'],
+    'Изоляция': ['пароизоляц', 'теплоизоляц'],
 }
 
 
-def extract_material_grade(name: str, concrete_grade_value: Any) -> str:
+def detect_unit_type(material_name: str, has_volume: bool = False, has_area: bool = False) -> str:
     """
-    Извлекает марку материала из колонки ExpCheck_MaterialConcrete:MGE_ConcreteGrade
-    или из названия материала.
-    
-    Для бетона: В30, В35, B30, B35, В10, В25 и т.д.
-    Для других материалов: возвращает пустую строку (марка не применима)
-    
-    Args:
-        name: Наименование элемента или материала
-        concrete_grade_value: Значение из колонки марки бетона
-    
-    Returns:
-        Марка материала (например, "В30") или "" если не найдена
-    """
-    if concrete_grade_value and not pd.isna(concrete_grade_value):
-        grade_str = str(concrete_grade_value).strip()
-        if grade_str and grade_str != '0':
-            return grade_str
-    
-    # Пробуем извлечь из названия
-    if isinstance(name, str):
-        match = GRADE_PATTERN.search(name)
-        if match:
-            return match.group(0)
-    
-    return ""
-
-
-def detect_material_type(material_name: str) -> str:
-    """
-    Определяет тип материала по названию.
+    Определяет тип единицы измерения для материала по его названию.
     
     Args:
         material_name: Название материала
-    
+        has_volume: Есть ли колонка объема для этого элемента
+        has_area: Есть ли колонка площади для этого элемента
+        
     Returns:
-        Тип материала (Бетон, Гидроизоляция, Утеплитель и т.д.)
+        Тип единицы: 'volume' (м³), 'area' (м²), 'length' (м), 
+                     'volume_liquid' (л), 'pieces' (шт)
     """
     name_lower = material_name.lower()
-    for keyword, material_type in MATERIAL_TYPES.items():
-        if keyword in name_lower:
-            return material_type
-    return "Другой"
+    
+    # Сначала проверяем по паттернам названия
+    for unit_type, patterns in UNIT_PATTERNS.items():
+        for pattern in patterns:
+            if re.search(pattern, name_lower):
+                return unit_type
+    
+    # Если не нашли по паттернам, используем доступные метрики
+    if has_volume:
+        return 'volume'
+    if has_area:
+        return 'area'
+    
+    # По умолчанию считаем что это штуки (для поштучных элементов)
+    return 'pieces'
 
 
-def find_material_columns(df: pd.DataFrame) -> List[str]:
+def get_unit_label(unit_type: str) -> str:
     """
-    Находит все колонки с материалами в DataFrame.
-    
-    Args:
-        df: DataFrame с данными
-    
-    Returns:
-        Список имен колонок с материалами
+    Возвращает текстовое обозначение единицы измерения.
     """
-    material_cols = []
-    for col in df.columns:
-        # Ищем колонки Qto_* с материалами (вида Qto_*:XX_Название...)
-        if MATERIAL_COLUMN_PATTERN.match(str(col)):
-            material_cols.append(col)
-    return material_cols
-
-
-def extract_material_from_column_name(col_name: str) -> Optional[str]:
-    """
-    Извлекает название материала из имени колонки.
-    
-    Примеры:
-        "Qto_SlabBaseQuantities:02_Бетон B30 W6 F150 Гравий" → "Бетон B30 W6 F150 Гравий"
-        "Qto_WallBaseQuantities:30_Гидроизоляция мембрана Planter standard" → "Гидроизоляция мембрана Planter standard"
-    
-    Args:
-        col_name: Имя колонки
-    
-    Returns:
-        Название материала или None
-    """
-    # Сначала извлекаем часть после двоеточия
-    if ':' not in col_name:
-        return None
-    
-    suffix = col_name.split(':', 1)[1]  # Всё после первого двоеточия
-    
-    match = MATERIAL_NAME_PATTERN.search(suffix)
-    if match:
-        return match.group(1).strip()
-    return None
+    labels = {
+        'volume': 'м³',
+        'area': 'м²',
+        'length': 'м',
+        'volume_liquid': 'л',
+        'pieces': 'шт'
+    }
+    return labels.get(unit_type, 'шт')
 
 
 def find_ifc_report_file(session_folder: str) -> Optional[str]:
-    """
-    Находит файл ifc_report.xlsx в папке сессии.
-    
-    Args:
-        session_folder: Путь к папке сессии
-        
-    Returns:
-        Путь к Excel файлу или None
-    """
+    """Находит файл ifc_report.xlsx в папке сессии."""
     report_path = Path(session_folder) / 'ifc_report.xlsx'
     
     if not report_path.exists():
@@ -186,16 +144,7 @@ def find_ifc_report_file(session_folder: str) -> Optional[str]:
 def parse_excel_specification(excel_path: str) -> Dict[str, Any]:
     """
     Универсальный парсер Excel файла отчета IFC (лист "Элементы").
-    Извлекает ВСЕ материалы из таблицы:
-    - Базовые материалы из колонок MGE_Material
-    - Марки бетона из MGE_ConcreteGrade
-    - Дополнительные материалы из колонок Qto_* (гидроизоляция, утеплитель, раствор и т.д.)
-    
-    Args:
-        excel_path: Путь к Excel файлу
-        
-    Returns:
-        Словарь с данными: {success, items, total_items, material_columns_found}
+    Извлекает ВСЕ материалы из таблицы с их значениями и единицами измерения.
     """
     
     print(f"\n📊 Парсинг Excel отчета IFC: {os.path.basename(excel_path)}")
@@ -204,25 +153,21 @@ def parse_excel_specification(excel_path: str) -> Dict[str, Any]:
         # Читаем лист "Элементы"
         df = pd.read_excel(excel_path, sheet_name='Элементы', dtype=str)
         
-        # Нормализуем имена колонок: убираем лишние пробелы
+        # Нормализуем имена колонок
         df.columns = [str(col).strip() for col in df.columns]
         
         # Ожидаемые имена колонок
         col_long_name = 'Element Specific:LongName'
         col_ifc_class = 'Ifc Class'
+        col_concrete_grade = 'ExpCheck_MaterialConcrete:MGE_ConcreteGrade'
         
         # Проверяем наличие обязательных колонок
         if col_ifc_class not in df.columns:
-            raise ValueError(f"Столбец '{col_ifc_class}' не найден в файле. Доступные: {list(df.columns)[:10]}...")
+            raise ValueError(f"Столбец '{col_ifc_class}' не найден в файле.")
         if col_long_name not in df.columns:
-            # Пробуем альтернативное имя
             col_long_name = 'Element Specific:Name'
             if col_long_name not in df.columns:
                 raise ValueError(f"Столбец '{col_long_name}' не найден в файле")
-        
-        # Находим все колонки с материалами (Qto_*:XX_Название...)
-        material_columns = find_material_columns(df)
-        print(f"   📋 Найдено {len(material_columns)} колонок с материалами")
         
         items = []
         skipped_rows = 0
@@ -234,102 +179,112 @@ def parse_excel_specification(excel_path: str) -> Dict[str, Any]:
                 continue
             
             ifc_class = str(ifc_class).strip()
-            if ifc_class not in IFC_MAPPING:
-                # Неинтересный тип элемента (IfcBuildingStorey, IfcGroup и т.д.)
+            
+            # Пропускаем если класс не в маппинге
+            if ifc_class not in IFC_ELEMENT_MAPPING:
                 skipped_rows += 1
                 continue
             
-            base_material_col, volume_col = IFC_MAPPING[ifc_class]
+            long_name = row.get(col_long_name, '')
+            if pd.isna(long_name):
+                long_name = ''
             
-            # Получаем марку бетона из общей колонки
-            concrete_grade = row.get(CONCRETE_GRADE_COLUMN)
+            # Получаем марку бетона
+            concrete_grade = row.get(col_concrete_grade, '')
+            if pd.isna(concrete_grade) or concrete_grade == '0':
+                concrete_grade = ''
             
-            # Получаем наименование элемента
-            long_name = row.get(col_long_name)
+            # Получаем конфиг для этого типа элемента
+            element_config = IFC_ELEMENT_MAPPING[ifc_class]
+            qto_prefix = element_config['qto_prefix']
+            volume_col_name = f"{qto_prefix}:{element_config.get('volume_col')}" if element_config.get('volume_col') else None
+            area_col_name = f"{qto_prefix}:{element_config.get('area_col')}" if element_config.get('area_col') else None
             
-            # Извлекаем марку бетона
-            grade = extract_material_grade(long_name if pd.notna(long_name) else '', concrete_grade)
+            # Получаем значения объема и площади
+            volume_value = None
+            area_value = None
             
-            # Получаем базовый материал
-            base_material = row.get(base_material_col) if base_material_col in df.columns else None
-            if pd.isna(base_material) or not base_material or base_material == '0':
-                base_material = "Бетон"  # значение по умолчанию
-            base_material = str(base_material).strip()
-            
-            # Основной объём элемента (NetVolume для данного типа)
-            main_volume = None
-            if volume_col and volume_col in df.columns:
-                vol_val = row.get(volume_col)
-                if pd.notna(vol_val) and vol_val:
+            if volume_col_name and volume_col_name in df.columns:
+                vol_val = row.get(volume_col_name)
+                if vol_val and str(vol_val) != '0' and str(vol_val) != 'nan':
                     try:
-                        vol_str = str(vol_val).replace(',', '.')
-                        main_volume = float(vol_str)
+                        volume_value = float(str(vol_val).replace(',', '.'))
                     except (ValueError, TypeError):
                         pass
             
-            # Создаём запись для основного материала (бетон с маркой)
-            if grade:
-                full_material = f"{base_material} {grade}"
+            if area_col_name and area_col_name in df.columns:
+                area_val = row.get(area_col_name)
+                if area_val and str(area_val) != '0' and str(area_val) != 'nan':
+                    try:
+                        area_value = float(str(area_val).replace(',', '.'))
+                    except (ValueError, TypeError):
+                        pass
+            
+            # Определяем материал
+            # Базовый материал из MGE_Material (если есть специфичная колонка)
+            base_material_col = f'ExpCheck_{ifc_class[3:]}:MGE_Material'  # IfcWall -> ExpCheck_Wall:MGE_Material
+            base_material = 'Бетон'  # значение по умолчанию
+            
+            if base_material_col in df.columns:
+                mat_val = row.get(base_material_col)
+                if mat_val and str(mat_val) != '0' and str(mat_val) != 'nan':
+                    base_material = str(mat_val).strip()
+            
+            # Формируем полное название материала с маркой
+            if concrete_grade:
+                full_material = f"{base_material} {concrete_grade}"
             else:
-                full_material = base_material if base_material != '0' else 'Материал'
+                full_material = base_material
             
-            material_type = detect_material_type(full_material)
+            # Определяем группу материала
+            material_group = "Другой"
+            for group, keywords in MATERIAL_GROUPS.items():
+                for keyword in keywords:
+                    if keyword.lower() in full_material.lower():
+                        material_group = group
+                        break
+                if material_group != "Другой":
+                    break
             
-            # Добавляем основной материал элемента
-            items.append({
-                'ifc_class': ifc_class,
-                'material_full': full_material,
-                'material_base': base_material,
-                'material_type': material_type,
-                'grade': grade,
-                'volume': main_volume,
-                'count': 1 if main_volume is None else 0,
-                'source_name': long_name if pd.notna(long_name) else '',
-                'is_main_material': True,
-                'source_column': 'NetVolume'
-            })
-            
-            # Обрабатываем дополнительные материалы из колонок Qto_*
-            # Это могут быть: гидроизоляция, утеплитель, раствор, арматура и т.д.
-            for mat_col in material_columns:
-                # Определяем, относится ли эта колонка к текущему типу элемента
-                # Например, Qto_WallBaseQuantities:* для IfcWall
-                element_type = ifc_class[3:]  # Убираем "Ifc" → "Wall", "Column", etc.
-                if f"Qto_{element_type}BaseQuantities:" not in mat_col and \
-                   f"Qto_{element_type}Common:" not in mat_col:
-                    continue
-                
-                vol_val = row.get(mat_col)
-                if pd.isna(vol_val) or not vol_val or vol_val == '0':
-                    continue
-                
-                try:
-                    vol_str = str(vol_val).replace(',', '.')
-                    mat_volume = float(vol_str)
-                    if mat_volume <= 0:
-                        continue
-                except (ValueError, TypeError):
-                    continue
-                
-                # Извлекаем название материала из имени колонки
-                material_name = extract_material_from_column_name(mat_col)
-                if not material_name:
-                    continue
-                
-                material_type = detect_material_type(material_name)
-                
-                # Добавляем дополнительный материал
+            # Добавляем запись с объемом (если есть)
+            if volume_value is not None and volume_value > 0:
+                unit_type = detect_unit_type(full_material, has_volume=True, has_area=False)
                 items.append({
                     'ifc_class': ifc_class,
-                    'material_full': material_name,
-                    'material_base': material_name.split()[0] if material_name else 'Другой',
-                    'material_type': material_type,
-                    'grade': '',
-                    'volume': mat_volume,
-                    'count': 0,
-                    'source_name': long_name if pd.notna(long_name) else '',
-                    'is_main_material': False,
-                    'source_column': mat_col
+                    'element_name': long_name,
+                    'material_full': full_material,
+                    'material_group': material_group,
+                    'unit_type': unit_type,
+                    'unit_label': get_unit_label(unit_type),
+                    'value': volume_value,
+                    'metric_type': 'volume'
+                })
+            
+            # Добавляем запись с площадью (если есть)
+            if area_value is not None and area_value > 0:
+                unit_type = detect_unit_type(full_material, has_volume=False, has_area=True)
+                items.append({
+                    'ifc_class': ifc_class,
+                    'element_name': long_name,
+                    'material_full': full_material,
+                    'material_group': material_group,
+                    'unit_type': unit_type,
+                    'unit_label': get_unit_label(unit_type),
+                    'value': area_value,
+                    'metric_type': 'area'
+                })
+            
+            # Если нет ни объема ни площади - добавляем как штуку
+            if volume_value is None and area_value is None:
+                items.append({
+                    'ifc_class': ifc_class,
+                    'element_name': long_name,
+                    'material_full': full_material,
+                    'material_group': material_group,
+                    'unit_type': 'pieces',
+                    'unit_label': 'шт',
+                    'value': 1.0,
+                    'metric_type': 'pieces'
                 })
         
         print(f"   ✅ Извлечено {len(items)} записей о материалах (пропущено {skipped_rows} нерелевантных строк)")
@@ -338,80 +293,52 @@ def parse_excel_specification(excel_path: str) -> Dict[str, Any]:
             'success': True,
             'items': items,
             'total_items': len(items),
-            'material_columns_found': material_columns,
         }
         
     except Exception as e:
         print(f"   ❌ Ошибка при парсинге Excel: {e}")
         import traceback
         traceback.print_exc()
-        return {'success': False, 'error': str(e), 'items': [], 'material_columns_found': []}
-        
-        print(f"   ✅ Извлечено {len(items)} элементов (пропущено {skipped_rows} нерелевантных строк)")
-        
-        return {
-            'success': True,
-            'items': items,
-            'total_items': len(items),
-        }
-        
-    except Exception as e:
-        print(f"   ❌ Ошибка при парсинге Excel: {e}")
-        import traceback
-        traceback.print_exc()
-        return {'success': False, 'error': str(e), 'items': []}
+        return {'success': False, 'error': str(e), 'items': [], 'total_items': 0}
 
 
-def aggregate_materials_data(items: List[Dict[str, Any]]) -> Dict[str, Dict[str, float]]:
+def aggregate_materials_data(items: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
     """
-    Агрегирует данные по полному наименованию материала (с маркой).
-    Если есть объём – суммируем, иначе – суммируем количество.
-    
-    Args:
-        items: Список элементов с данными
-        
-    Returns:
-        Словарь: {материал_с_маркой: {'volume': ..., 'count': ..., 'elements_with_volume': ..., 'elements_without_volume': ...}}
+    Агрегирует данные по полному наименованию материала + типу единицы.
     """
     
     aggregated = {}
     
     for item in items:
         material = item['material_full']
-        volume = item.get('volume')
-        count = item.get('count', 1)
+        unit_type = item['unit_type']
+        key = f"{material}|{unit_type}"
         
-        if material not in aggregated:
-            aggregated[material] = {
-                'volume': 0.0,
-                'count': 0,
-                'elements_with_volume': 0,
-                'elements_without_volume': 0,
-                'base_material': item['material_base'],
-                'grade': item['grade']
+        if key not in aggregated:
+            aggregated[key] = {
+                'material_full': material,
+                'material_group': item['material_group'],
+                'unit_type': unit_type,
+                'unit_label': item['unit_label'],
+                'total_value': 0.0,
+                'element_count': 0,
+                'elements_list': []
             }
         
-        if volume is not None and volume > 0:
-            aggregated[material]['volume'] += volume
-            aggregated[material]['elements_with_volume'] += 1
-        else:
-            aggregated[material]['count'] += count
-            aggregated[material]['elements_without_volume'] += 1
+        aggregated[key]['total_value'] += item['value']
+        aggregated[key]['element_count'] += 1
+        
+        # Сохраняем пример имени элемента
+        if len(aggregated[key]['elements_list']) < 3:
+            elem_name = item.get('element_name', '')
+            if elem_name and elem_name not in aggregated[key]['elements_list']:
+                aggregated[key]['elements_list'].append(elem_name)
     
     return aggregated
 
 
-def create_aggregated_excel(aggregated_data: Dict[str, Dict[str, float]], output_path: str) -> str:
-    """
-    Создаёт Excel отчёт с агрегированными данными (улучшенное форматирование).
-    
-    Args:
-        aggregated_data: Словарь с агрегированными данными
-        output_path: Путь для сохранения файла
-        
-    Returns:
-        Путь к сохраненному файлу
-    """
+def create_aggregated_excel(aggregated_data: Dict[str, Dict[str, Any]], output_path: str) -> str:
+    """Создаёт Excel отчёт с агрегированными данными."""
     
     print(f"\n📈 Создание Excel отчета: {output_path}")
     
@@ -420,9 +347,8 @@ def create_aggregated_excel(aggregated_data: Dict[str, Dict[str, float]], output
     ws.title = "Сводка по материалам"
     
     headers = [
-        "№", "Материал (с маркой)", "Базовая марка", "Марка бетона",
-        "Общий объём (м³)", "Кол-во элементов с объёмом",
-        "Количество (шт)", "Кол-во элементов без объёма", "Примечание"
+        "№", "Материал", "Группа", "Ед. изм.",
+        "Общее количество", "Кол-во элементов", "Примеры элементов"
     ]
     
     header_font = Font(bold=True, color="FFFFFF")
@@ -439,26 +365,30 @@ def create_aggregated_excel(aggregated_data: Dict[str, Dict[str, float]], output
         cell.alignment = header_alignment
         cell.border = thin_border
     
+    # Сортируем: сначала объем/площадь, потом штуки
+    sorted_items = sorted(
+        aggregated_data.items(),
+        key=lambda x: (
+            0 if x[1]['unit_type'] in ['volume', 'area', 'length', 'volume_liquid'] else 1,
+            x[1]['material_group'],
+            x[1]['material_full']
+        )
+    )
+    
     # Пишем данные
     row_num = 2
-    for idx, (material, data) in enumerate(sorted(aggregated_data.items()), 1):
-        note = ""
-        if data['elements_with_volume'] > 0:
-            note = f"расчёт по объёму ({data['elements_with_volume']} эл.)"
-            if data['elements_without_volume'] > 0:
-                note += f" + {data['elements_without_volume']} эл. по количеству"
-        else:
-            note = f"расчёт по количеству ({data['count']} шт.)"
+    for idx, (key, data) in enumerate(sorted_items, 1):
+        examples = "; ".join(data['elements_list'][:3])
+        if len(data['elements_list']) > 3:
+            examples += f" ... и ещё {len(data['elements_list']) - 3}"
         
         ws.cell(row=row_num, column=1, value=idx).border = thin_border
-        ws.cell(row=row_num, column=2, value=material).border = thin_border
-        ws.cell(row=row_num, column=3, value=data['base_material']).border = thin_border
-        ws.cell(row=row_num, column=4, value=data['grade']).border = thin_border
-        ws.cell(row=row_num, column=5, value=round(data['volume'], 3) if data['volume'] > 0 else None).border = thin_border
-        ws.cell(row=row_num, column=6, value=data['elements_with_volume'] if data['volume'] > 0 else None).border = thin_border
-        ws.cell(row=row_num, column=7, value=data['count'] if data['count'] > 0 else None).border = thin_border
-        ws.cell(row=row_num, column=8, value=data['elements_without_volume'] if data['elements_without_volume'] > 0 else None).border = thin_border
-        ws.cell(row=row_num, column=9, value=note).border = thin_border
+        ws.cell(row=row_num, column=2, value=data['material_full']).border = thin_border
+        ws.cell(row=row_num, column=3, value=data['material_group']).border = thin_border
+        ws.cell(row=row_num, column=4, value=data['unit_label']).border = thin_border
+        ws.cell(row=row_num, column=5, value=round(data['total_value'], 3)).border = thin_border
+        ws.cell(row=row_num, column=6, value=data['element_count']).border = thin_border
+        ws.cell(row=row_num, column=7, value=examples).border = thin_border
         row_num += 1
     
     # Автоширина колонок
@@ -468,7 +398,7 @@ def create_aggregated_excel(aggregated_data: Dict[str, Dict[str, float]], output
         for cell in col:
             if cell.value:
                 max_len = max(max_len, len(str(cell.value)))
-        ws.column_dimensions[col_letter].width = min(max_len + 2, 50)
+        ws.column_dimensions[col_letter].width = min(max_len + 2, 60)
     
     wb.save(output_path)
     print(f"   ✅ Excel сохранён: {output_path}")
@@ -476,23 +406,20 @@ def create_aggregated_excel(aggregated_data: Dict[str, Dict[str, float]], output
 
 
 def parse_and_aggregate_specification(session_folder: str) -> Dict[str, Any]:
-    """
-    Основная функция: поиск, парсинг, агрегация и сохранение.
-    Работает с файлом ifc_report.xlsx в папке сессии.
-    
-    Args:
-        session_folder: Путь к папке сессии
-        
-    Returns:
-        Словарь с результатами
-    """
+    """Основная функция: поиск, парсинг, агрегация и сохранение."""
     
     print("\n" + "="*60)
     print("📊 ПАРСИНГ ОТЧЕТА IFC (ifc_report.xlsx)")
     print("="*60)
     
-    results = {'success': False, 'excel_file_found': None, 'parsed_items': 0,
-               'aggregated_materials': 0, 'output_file': None}
+    results = {
+        'success': False, 
+        'excel_file_found': None, 
+        'parsed_items': 0,
+        'aggregated_materials': 0, 
+        'output_file': None,
+        'materials_summary': {}
+    }
     
     # Шаг 1: Найти файл ifc_report.xlsx
     excel_path = find_ifc_report_file(session_folder)
@@ -512,6 +439,22 @@ def parse_and_aggregate_specification(session_folder: str) -> Dict[str, Any]:
     aggregated_data = aggregate_materials_data(parse_result['items'])
     results['aggregated_materials'] = len(aggregated_data)
     
+    # Подготовка сводки для JSON
+    materials_summary = {}
+    for key, data in aggregated_data.items():
+        material_name = data['material_full']
+        if material_name not in materials_summary:
+            materials_summary[material_name] = {
+                'group': data['material_group'],
+                'values': {}
+            }
+        materials_summary[material_name]['values'][data['unit_type']] = {
+            'value': round(data['total_value'], 3),
+            'unit': data['unit_label'],
+            'element_count': data['element_count']
+        }
+    results['materials_summary'] = materials_summary
+    
     # Шаг 4: Создать выходной Excel файл
     output_path = Path(session_folder) / "materials_summary.xlsx"
     create_aggregated_excel(aggregated_data, str(output_path))
@@ -527,30 +470,31 @@ def parse_and_aggregate_specification(session_folder: str) -> Dict[str, Any]:
             'total_items_parsed': parse_result['total_items'],
             'total_materials': len(aggregated_data),
             'output_excel': 'materials_summary.xlsx',
-            'materials': aggregated_data
+            'materials': materials_summary
         }, f, ensure_ascii=False, indent=2)
     
     print(f"\n💾 Данные сохранены в: {json_path}")
     
     # Сводка в консоль
     print("\n" + "="*60)
-    print("📊 СВОДКА ПО МАТЕРИАЛАМ (с марками бетона):")
+    print("📊 СВОДКА ПО МАТЕРИАЛАМ:")
     print("="*60)
-    for material, data in sorted(aggregated_data.items()):
-        if data['volume'] > 0:
-            print(f"   • {material}: {data['volume']:.3f} м³ ({data['elements_with_volume']} эл.)")
-        else:
-            print(f"   • {material}: {data['count']} шт. ({data['elements_without_volume']} эл.)")
+    
+    by_unit = defaultdict(list)
+    for key, data in aggregated_data.items():
+        by_unit[data['unit_label']].append((data['material_full'], data['total_value'], data['element_count']))
+    
+    for unit_label in ['м³', 'м²', 'м', 'л', 'шт']:
+        if unit_label in by_unit:
+            print(f"\n   [{unit_label}]:")
+            for mat_name, total_val, elem_count in sorted(by_unit[unit_label], key=lambda x: -x[1]):
+                print(f"      • {mat_name}: {total_val:.3f} {unit_label} ({elem_count} эл.)")
+    
     return results
 
 
 def main(session_folder: str):
-    """
-    Основная функция парсинга отчета IFC.
-    
-    Args:
-        session_folder: Путь к папке сессии
-    """
+    """Основная функция парсинга отчета IFC."""
     print("="*60)
     print("📊 ПАРСИНГ ОТЧЕТА IFC (ifc_report.xlsx)")
     print("="*60)
