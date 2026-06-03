@@ -85,35 +85,53 @@ def convert_ifc_to_threejs_json(ifc_path, output_json_path):
                 if len(vertices) < 3 or len(faces) < 1:
                     continue
                 
-                # Get or create material
-                mat_key = str(getattr(geom, 'material', 'default'))
+                # Get element type for color mapping
+                elem_type = product.is_a()
+                
+                # Generate different colors based on element type (not material name)
+                if 'Wall' in elem_type:
+                    color = [0.8, 0.8, 0.8]  # Gray walls
+                elif 'Slab' in elem_type or 'Cover' in elem_type:
+                    color = [0.7, 0.7, 0.9]  # Light blue slabs
+                elif 'Column' in elem_type:
+                    color = [0.9, 0.7, 0.7]  # Light red columns
+                elif 'Beam' in elem_type:
+                    color = [0.7, 0.9, 0.7]  # Light green beams
+                elif 'Door' in elem_type:
+                    color = [0.9, 0.9, 0.5]  # Yellow doors
+                elif 'Window' in elem_type:
+                    color = [0.5, 0.9, 0.9]  # Cyan windows
+                elif 'Stair' in elem_type:
+                    color = [0.9, 0.7, 0.5]  # Orange stairs
+                elif 'OpeningElement' in elem_type:
+                    color = [0.6, 0.6, 0.6]  # Dark gray openings
+                elif 'BuildingElementProxy' in elem_type:
+                    color = [0.85, 0.85, 0.75]  # Light yellow proxies
+                elif 'ReinforcingMesh' in elem_type or 'ReinforcingBar' in elem_type:
+                    color = [0.5, 0.5, 0.5]  # Dark gray reinforcement
+                elif 'Ramp' in elem_type:
+                    color = [0.8, 0.6, 0.4]  # Brown ramp
+                elif 'Roof' in elem_type:
+                    color = [0.6, 0.4, 0.4]  # Reddish roof
+                elif 'Railing' in elem_type:
+                    color = [0.4, 0.6, 0.6]  # Teal railing
+                elif 'Plate' in elem_type:
+                    color = [0.7, 0.8, 0.6]  # Light green plates
+                elif 'Member' in elem_type:
+                    color = [0.6, 0.7, 0.8]  # Light blue members
+                elif 'Footing' in elem_type or 'Pile' in elem_type:
+                    color = [0.5, 0.4, 0.3]  # Brown foundation
+                elif 'CurtainWall' in elem_type:
+                    color = [0.6, 0.8, 0.9]  # Light cyan curtain walls
+                else:
+                    color = [0.75, 0.75, 0.85]  # Default light purple
+                
+                # Use element type as material key instead of geom.material
+                mat_key = elem_type
                 if mat_key not in material_map:
                     material_map[mat_key] = material_index
-                    # Generate different colors based on element type
-                    elem_type = product.is_a()
-                    if 'Wall' in elem_type:
-                        color = [0.8, 0.8, 0.8]
-                    elif 'Slab' in elem_type or 'Cover' in elem_type:
-                        color = [0.7, 0.7, 0.9]
-                    elif 'Column' in elem_type:
-                        color = [0.9, 0.7, 0.7]
-                    elif 'Beam' in elem_type:
-                        color = [0.7, 0.9, 0.7]
-                    elif 'Door' in elem_type:
-                        color = [0.9, 0.9, 0.5]
-                    elif 'Window' in elem_type:
-                        color = [0.5, 0.9, 0.9]
-                    elif 'Stair' in elem_type:
-                        color = [0.9, 0.7, 0.5]
-                    elif 'OpeningElement' in elem_type:
-                        color = [0.6, 0.6, 0.6]  # Gray for openings
-                    elif 'BuildingElementProxy' in elem_type:
-                        color = [0.85, 0.85, 0.75]  # Light yellow for proxies
-                    else:
-                        color = [0.75, 0.75, 0.85]
-                    
                     geometry_data['materials'].append({
-                        'name': mat_key,
+                        'name': elem_type,
                         'color': color
                     })
                     material_index += 1
