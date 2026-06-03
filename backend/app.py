@@ -214,11 +214,24 @@ def process_files():
     with open(results_path, 'w', encoding='utf-8') as f:
         json.dump(results, f, ensure_ascii=False, indent=2, default=str)
     
-    # Update session status
+    # Update session status - count files in explanatory_note and drawings folders
     session_info['status'] = 'completed'
+    
+    # Count files in explanatory_note folder (text pages)
+    explanatory_folder = os.path.join(session_folder, 'explanatory_note')
+    text_pages_count = 0
+    if os.path.exists(explanatory_folder):
+        text_pages_count = len([f for f in os.listdir(explanatory_folder) if f.lower().endswith('.pdf')])
+    
+    # Count files in drawings folder
+    drawings_folder = os.path.join(session_folder, 'drawings')
+    drawing_pages_count = 0
+    if os.path.exists(drawings_folder):
+        drawing_pages_count = len([f for f in os.listdir(drawings_folder) if f.lower().endswith(('.pdf', '.png', '.jpg', '.jpeg'))])
+    
     session_info['results_summary'] = {
-        'text_pages_count': len(results['text_pages']),
-        'drawing_pages_count': len(results['drawing_pages']),
+        'text_pages_count': text_pages_count,
+        'drawing_pages_count': drawing_pages_count,
         'drawings_folder_count': session_info.get('drawings_count', 0),
         'ifc_processed': results['ifc_results'] is not None,
         'pdf_classified': results['pdf_classification'] is not None,
@@ -231,8 +244,8 @@ def process_files():
     return jsonify({
         'success': True,
         'session_id': session_id,
-        'text_pages_count': len(results['text_pages']),
-        'drawing_pages_count': len(results['drawing_pages']),
+        'text_pages_count': text_pages_count,
+        'drawing_pages_count': drawing_pages_count,
         'drawings_count': session_info.get('drawings_count', 0),
         'ifc_processed': results['ifc_results'] is not None,
         'ifc_excel_file': session_info.get('ifc_excel_file'),
@@ -306,6 +319,66 @@ def get_results(session_id):
         'session_info': session_info,
         'results': results
     })
+
+
+@app.route('/api/materials-summary/<session_id>')
+def get_materials_summary(session_id):
+    """Get materials summary data from Excel file"""
+    import openpyxl
+    
+    session_folder = os.path.join(UPLOAD_FOLDER, session_id)
+    if not os.path.exists(session_folder):
+        return jsonify({'error': 'Session not found'}), 404
+    
+    materials_file = os.path.join(session_folder, 'materials_summary.xlsx')
+    if not os.path.exists(materials_file):
+        return jsonify({'error': 'Materials summary not found'}), 404
+    
+    try:
+        wb = openpyxl.load_workbook(materials_file, data_only=True)
+        ws = wb.active
+        rows = []
+        for row in ws.iter_rows(values_only=True):
+            rows.append([str(cell) if cell is not None else '' for cell in row])
+        
+        return jsonify({'data': rows})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/building-height/<session_id>')
+def get_building_height(session_id):
+    """Get building height from IFC report Excel file"""
+    import openpyxl
+    
+    session_folder = os.path.join(UPLOAD_FOLDER, session_id)
+    if not os.path.exists(session_folder):
+        return jsonify({'error': 'Session not found'}), 404
+    
+    ifc_report_file = os.path.join(session_folder, 'ifc_report.xlsx')
+    if not os.path.exists(ifc_report_file):
+        return jsonify({'error': 'IFC report not found'}), 404
+    
+    try:
+        wb = openpyxl.load_workbook(ifc_report_file, data_only=True)
+        if 'Сводка' not in wb.sheetnames:
+            return jsonify({'error': 'Summary sheet not found'}), 404
+        
+        ws = wb['Сводка']
+        height = None
+        
+        # Find "Высота здания" row
+        for row in ws.iter_rows(values_only=True):
+            if row[0] and 'Высота здания' in str(row[0]):
+                height = row[1]
+                break
+        
+        if height is not None:
+            return jsonify({'height': height})
+        else:
+            return jsonify({'height': None})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':
