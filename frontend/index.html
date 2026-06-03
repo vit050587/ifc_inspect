@@ -542,13 +542,12 @@
                             <table class="pages-table">
                                 <thead>
                                     <tr>
-                                        <th>№</th>
-                                        <th>Материал (с маркой)</th>
-                                        <th>Базовая марка</th>
-                                        <th>Марка бетона</th>
-                                        <th>Общий объём (м³)</th>
+                                        <th>Материал</th>
+                                        <th>Группа</th>
+                                        <th>Ед. изм.</th>
+                                        <th>Общее количество</th>
                                         <th>Кол-во элементов</th>
-                                        <th>Количество (шт)</th>
+                                        <th>Примеры элементов</th>
                                     </tr>
                                 </thead>
                                 <tbody id="materialsTableBody">
@@ -1366,7 +1365,6 @@
                 rows.forEach(row => {
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
-                        <td>${row[0] || ''}</td>
                         <td>${row[1] || ''}</td>
                         <td>${row[2] || ''}</td>
                         <td>${row[3] || ''}</td>
