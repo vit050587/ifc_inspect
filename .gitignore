@@ -1,1 +1,8 @@
-Nothing should be ignored based on the provided changes. The only modified file is a Python source file (`scripts/ifc_parser.py`), which should not be added to .gitignore. There are no build artifacts, dependencies, temporary files, or other items that need to be ignored in the provided change list.
+```
+# Compiled Python files
+*.pyc
+__pycache__/
+
+# Original rules preserved
+*.log
+```
