@@ -530,30 +530,13 @@
                             <div class="value" id="buildingHeight">0</div>
                         </div>
                         <div class="result-card" style="grid-column: 1 / -1;">
-                            <h3>LongName (ИМЯ)</h3>
-                            <div class="value" id="longName" style="font-size: 16px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">-</div>
+                            <h3>Адрес</h3>
+                            <div class="value" id="longName" style="font-size: 16px; max-width: 100%; white-space: normal; word-wrap: break-word; overflow-wrap: break-word;">-</div>
                         </div>
-                    </div>
-                    
-                    <!-- Download Excel Section -->
-                    <div class="download-section" id="downloadSection" style="display: none;">
-                        <h3 style="margin-bottom: 15px; color: #2c3e50;">📊 Результат парсинга IFC</h3>
-                        <p style="margin-bottom: 20px; color: #7f8c8d;">
-                            Таблица Excel содержит подробную информацию обо всех элементах здания:
-                            стены, перекрытия, колонны, балки, окна, двери и т.д.
-                        </p>
-                        <button class="download-btn" id="downloadExcelBtn" onclick="downloadExcel()">
-                            📥 Скачать Excel отчет
-                        </button>
                     </div>
                     
                     <!-- Download Materials Summary Section -->
                     <div class="download-section" id="downloadMaterialsSection" style="display: none;">
-                        <h3 style="margin-bottom: 15px; color: #2c3e50;">📋 Сводка по материалам</h3>
-                        <p style="margin-bottom: 20px; color: #7f8c8d;">
-                            Таблица Excel содержит агрегированную информацию по материалам:
-                            марки бетона, объёмы, количество элементов.
-                        </p>
                         <button class="download-btn" id="downloadMaterialsBtn" onclick="downloadMaterials()" style="background: #3498db;">
                             📥 Скачать сводку материалов
                         </button>
@@ -583,7 +566,6 @@
                     
                     <!-- Pages Info Table -->
                     <div class="pages-info" id="pagesInfo" style="display: none;">
-                        <h3 style="margin: 20px 0 15px; color: #2c3e50;">📄 Страницы PDF</h3>
                         <table class="pages-table">
                             <thead>
                                 <tr>
@@ -662,7 +644,6 @@
     <script>
         let sessionId = null;
         let selectedFiles = [];
-        let ifcExcelFile = null;
         let ifcViewerInfo = null;
         
         // Wait for viewer libraries to load with better reliability
@@ -830,7 +811,6 @@
         
         function displayResults(data) {
             const resultsSection = document.getElementById('resultsSection');
-            const downloadSection = document.getElementById('downloadSection');
             const downloadMaterialsSection = document.getElementById('downloadMaterialsSection');
             const materialsTableSection = document.getElementById('materialsTableSection');
             const pagesInfo = document.getElementById('pagesInfo');
@@ -885,12 +865,6 @@
                         loadMaterialsTable();
                     })
                     .catch(err => console.error('Error loading detailed results:', err));
-            }
-            
-            // Show download button for IFC Excel report
-            if (data.ifc_processed && data.ifc_excel_file) {
-                ifcExcelFile = data.ifc_excel_file;
-                downloadSection.style.display = 'block';
             }
             
             // Show download button for materials summary Excel
@@ -1456,15 +1430,6 @@
             }
             
             window.location.href = `/api/download/${sessionId}/materials_summary.xlsx`;
-        }
-        
-        function downloadExcel() {
-            if (!sessionId || !ifcExcelFile) {
-                showError('Файл Excel не найден');
-                return;
-            }
-            
-            window.location.href = `/api/download/${sessionId}/${ifcExcelFile}`;
         }
         
         function showError(message) {
