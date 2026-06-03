@@ -400,6 +400,9 @@ def parse_and_aggregate_specification(session_folder: str) -> Dict[str, Any]:
         if len(type_items) > 5:
             print(f"      ... и ещё {len(type_items) - 5}")
     
+    # Подсчет количества уникальных видов материалов (тип элемента + материал)
+    results['aggregated_materials'] = len(parse_result['items'])
+    
     return results
 
 
