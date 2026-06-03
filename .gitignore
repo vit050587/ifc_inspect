@@ -1,1 +1,18 @@
-Nothing should be ignored based on the provided file changes. The only modified file is a Python script (`scripts/xlsx_parser.py`), which is source code and should not be added to .gitignore. Since there are no build artifacts, dependencies, temporary files, or other ignorable items in the changes, no .gitignore rules are needed.
+```
+# Uploads directory (contains temporary files)
+uploads/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Logs
+*.log
+
+# Environment files
+.env
+.env.local
+*.env.*
+```
