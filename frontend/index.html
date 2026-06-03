@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IFC Inspect - Сервис смет строящегося дома</title>
+    <title>Размеры и объемы материалов - Сервис поиска объема материалов</title>
     <style>
         * {
             margin: 0;
@@ -460,8 +460,8 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🏗️ IFC Inspect</h1>
-            <p>Сервис создания смет строящегося дома по IFC и PDF документам</p>
+            <h1>🏗️ Размеры и объемы материалов</h1>
+            <p>Сервис поиска объема материалов конструктивных и архитектурных элементов из проектной документации</p>
         </div>
         
         <div class="content">
@@ -803,17 +803,21 @@
                             document.getElementById('materialsCount').textContent = ifcResults.materials_count || 0;
                         }
                         
-                        // Load IFC viewer info
+                        // Load IFC viewer info (but don't display it yet as per requirements)
                         if (resultsData.session_info && resultsData.session_info.ifc_viewer_info) {
                             ifcViewerInfo = resultsData.session_info.ifc_viewer_info[0];
-                            showIFCViewer(ifcViewerInfo);
+                            // IFC viewer is prepared but not displayed on the interface
+                            console.log('IFC viewer info loaded:', ifcViewerInfo);
                         }
                     })
                     .catch(err => console.error('Error loading detailed results:', err));
             }
             
-            // Show download button if IFC was processed
-            if (data.ifc_processed && data.ifc_excel_file) {
+            // Show download button for materials Excel if available
+            if (data.materials_excel_file) {
+                ifcExcelFile = data.materials_excel_file;
+                downloadSection.style.display = 'block';
+            } else if (data.ifc_processed && data.ifc_excel_file) {
                 ifcExcelFile = data.ifc_excel_file;
                 downloadSection.style.display = 'block';
             }
