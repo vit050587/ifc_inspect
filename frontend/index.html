@@ -488,13 +488,6 @@
             <div class="loading" id="loading">
                 <div class="spinner"></div>
                 <p>Обрабатываем файлы... Это может занять несколько минут</p>
-                <p style="font-size: 13px; color: #7f8c8d; margin-top: 10px;">
-                    • Организация файлов по папкам (IFC, Excel, PDF)<br>
-                    • Классификация PDF документов с помощью ИИ (gemma3:27b)<br>
-                    • Извлечение чертежей из пояснительной записки<br>
-                    • Парсинг IFC модели и создание 3D вьюера<br>
-                    • Генерация отчета по элементам и материалам
-                </p>
             </div>
             
             <!-- Error Message -->
@@ -569,9 +562,6 @@
                         <table class="pages-table">
                             <thead>
                                 <tr>
-                                    <th>№</th>
-                                    <th>Тип</th>
-                                    <th>Размер</th>
                                     <th>Файл</th>
                                 </tr>
                             </thead>
@@ -844,7 +834,7 @@
                                 const storiesCount = ifcResults.stories_count || 0;
                                 document.getElementById('storiesCount').textContent = storiesCount;
                                 
-                                // Get building height - need to fetch from Excel
+                                // Get building address
                                 if (projectInfo.LongName) {
                                     document.getElementById('longName').textContent = projectInfo.LongName;
                                 }
@@ -1349,14 +1339,8 @@
                 
                 allPages.forEach(page => {
                     const row = document.createElement('tr');
-                    const isDrawing = page.type === 'drawing';
                     
                     row.innerHTML = `
-                        <td>${page.page_num}</td>
-                        <td class="${isDrawing ? 'page-type-drawing' : 'page-type-text'}">
-                            ${isDrawing ? '🏗️ Чертеж' : '📄 Текст'}
-                        </td>
-                        <td>${page.size}</td>
                         <td>${page.source_file}</td>
                     `;
                     tbody.appendChild(row);
