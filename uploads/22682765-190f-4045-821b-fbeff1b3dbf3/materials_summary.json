@@ -1,0 +1,8 @@
+{
+  "success": true,
+  "source_file": "Спецификация по ifc КР.xlsx",
+  "total_items_parsed": 0,
+  "total_materials": 0,
+  "output_excel": "materials_summary.xlsx",
+  "materials": {}
+}
