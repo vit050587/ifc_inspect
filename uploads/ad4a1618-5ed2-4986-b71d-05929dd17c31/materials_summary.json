@@ -1,49 +1,64 @@
 {
   "success": true,
   "source_file": "ifc_report.xlsx",
-  "total_items_parsed": 1432,
-  "total_materials": 5,
+  "total_items_parsed": 4638,
+  "total_materials": 6,
   "output_excel": "materials_summary.xlsx",
   "materials": {
-    "Бетон В30": {
-      "volume": 3931.0768162764025,
-      "count": 0,
-      "elements_with_volume": 1037,
-      "elements_without_volume": 0,
-      "base_material": "Бетон",
-      "grade": "В30"
-    },
     "Бетон": {
-      "volume": 133.6045944239141,
-      "count": 54,
-      "elements_with_volume": 81,
-      "elements_without_volume": 54,
-      "base_material": "Бетон",
-      "grade": ""
+      "group": "Бетон",
+      "values": {
+        "pieces": {
+          "value": 1903.0,
+          "unit": "шт",
+          "element_count": 1903
+        },
+        "volume": {
+          "value": 7150.579,
+          "unit": "м³",
+          "element_count": 173
+        }
+      }
+    },
+    "Бетон В30": {
+      "group": "Бетон",
+      "values": {
+        "volume": {
+          "value": 22102.708,
+          "unit": "м³",
+          "element_count": 2042
+        }
+      }
     },
     "Бетон В10": {
-      "volume": 266.5614908434481,
-      "count": 0,
-      "elements_with_volume": 8,
-      "elements_without_volume": 0,
-      "base_material": "Бетон",
-      "grade": "В10"
+      "group": "Бетон",
+      "values": {
+        "volume": {
+          "value": 5545.556,
+          "unit": "м³",
+          "element_count": 16
+        }
+      }
     },
     "Бетон В25": {
-      "volume": 2269.207359748746,
-      "count": 0,
-      "elements_with_volume": 66,
-      "elements_without_volume": 0,
-      "base_material": "Бетон",
-      "grade": "В25"
+      "group": "Бетон",
+      "values": {
+        "volume": {
+          "value": 26240.205,
+          "unit": "м³",
+          "element_count": 132
+        }
+      }
     },
     "Бетон В35": {
-      "volume": 1755.0696111456275,
-      "count": 0,
-      "elements_with_volume": 186,
-      "elements_without_volume": 0,
-      "base_material": "Бетон",
-      "grade": "В35"
+      "group": "Бетон",
+      "values": {
+        "volume": {
+          "value": 8578.083,
+          "unit": "м³",
+          "element_count": 372
+        }
+      }
     }
   }
 }
