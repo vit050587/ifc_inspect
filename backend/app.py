@@ -12,8 +12,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from scripts.files_classifier import classify_and_organize_files
 from scripts.pdf_classifier_llm import classify_pdf_files as classify_pdf_llm
 from scripts.draw_detector import extract_drawings_from_explanatory_note
-# from scripts.ifc_viewer import prepare_ifc_for_viewer  # ЗАГЛУШЕНО - не используется
-# from scripts.ifc_parser import parse_ifc_file  # ЗАГЛУШЕНО - не используется
+from scripts.ifc_viewer import prepare_ifc_for_viewer
+from scripts.ifc_parser import parse_ifc_file
 from scripts.xlsx_parser import parse_and_aggregate_specification
 
 app = Flask(__name__, static_folder='../frontend', static_url_path='')
@@ -160,60 +160,76 @@ def process_files():
         print(f"❌ Ошибка извлечения чертежей: {e}")
         session_info['drawings_error'] = str(e)
     
-    # Step 4: Process IFC files - prepare viewer and parse (ЗАГЛУШЕНО - не выполняется)
+    # Step 4: Process IFC files - prepare viewer and parse
     print("\n" + "="*60)
-    print("🏢 ШАГ 4: ОБРАБОТКА IFC МОДЕЛЕЙ (ЗАГЛУШЕНО)")
+    print("🏢 ШАГ 4: ОБРАБОТКА IFC МОДЕЛЕЙ")
     print("="*60)
-    print("⏭️ Пропускаем обработку IFC моделей")
     
-    # IFC обработка временно отключена
-    # ifc_folder = os.path.join(session_folder, 'ifc_models')
-    # ifc_viewer_info = []
-    # 
-    # if os.path.exists(ifc_folder):
-    #     ifc_files = [os.path.join(ifc_folder, f) for f in os.listdir(ifc_folder) if f.lower().endswith('.ifc')]
-    #     
-    #     for ifc_path in ifc_files:
-    #         if os.path.exists(ifc_path):
-    #             # Step 4a: Prepare IFC for viewer
-    #             print(f"\n📐 Подготовка IFC для вьюера: {os.path.basename(ifc_path)}")
-    #             try:
-    #                 viewer_result = prepare_ifc_for_viewer(ifc_path, session_folder)
-    #                 ifc_viewer_info.append(viewer_result)
-    #                 session_info['ifc_viewer_info'] = ifc_viewer_info
-    #                 print(f"✓ IFC готов для просмотра: {viewer_result.get('filename', 'unknown')}")
-    #             except Exception as e:
-    #                 print(f"❌ Ошибка подготовки IFC вьюера: {e}")
-    #                 session_info['ifc_viewer_error'] = str(e)
-    #             
-    #             # Step 4b: Parse IFC file
-    #             print(f"\n📊 Парсинг IFC: {os.path.basename(ifc_path)}")
-    #             try:
-    #                 ifc_result = parse_ifc_file(ifc_path, session_folder)
-    #                 results['ifc_results'] = ifc_result
-    #                 session_info['ifc_excel_file'] = ifc_result.get('excel_filename')
-    #             except Exception as e:
-    #                 print(f"❌ Ошибка парсинга IFC: {e}")
-    #                 session_info['ifc_error'] = str(e)
+    ifc_folder = os.path.join(session_folder, 'ifc_models')
+    ifc_viewer_info = []
+    ifc_results = None
     
-    # Step 5: Parse Excel specification (ifc_report.xlsx) - ЗАГЛУШЕНО вместе с шагом 4
+    if os.path.exists(ifc_folder):
+        ifc_files_list = [os.path.join(ifc_folder, f) for f in os.listdir(ifc_folder) if f.lower().endswith('.ifc')]
+        
+        for ifc_path in ifc_files_list:
+            if os.path.exists(ifc_path):
+                # Step 4a: Prepare IFC for viewer
+                print(f"\n📐 Подготовка IFC для вьюера: {os.path.basename(ifc_path)}")
+                try:
+                    viewer_result = prepare_ifc_for_viewer(ifc_path, session_folder)
+                    ifc_viewer_info.append(viewer_result)
+                    session_info['ifc_viewer_info'] = ifc_viewer_info
+                    print(f"✓ IFC готов для просмотра: {viewer_result.get('filename', 'unknown')}")
+                except Exception as e:
+                    print(f"❌ Ошибка подготовки IFC вьюера: {e}")
+                    session_info['ifc_viewer_error'] = str(e)
+                
+                # Step 4b: Parse IFC file
+                print(f"\n📊 Парсинг IFC: {os.path.basename(ifc_path)}")
+                try:
+                    ifc_result = parse_ifc_file(ifc_path, session_folder)
+                    ifc_results = ifc_result
+                    results['ifc_results'] = ifc_result
+                    session_info['ifc_excel_file'] = ifc_result.get('excel_filename')
+                    print(f"✓ IFC распарсен, отчет сохранен: {ifc_result.get('excel_filename')}")
+                except Exception as e:
+                    print(f"❌ Ошибка парсинга IFC: {e}")
+                    session_info['ifc_error'] = str(e)
+    else:
+        print("⏭️ Папка ifc_models не найдена, пропускаем обработку IFC")
+    
+    # Step 5: Parse Excel specification (ifc_report.xlsx)
     print("\n" + "="*60)
-    print("📊 ШАГ 5: ПАРСИНГ EXCEL СПЕЦИФИКАЦИИ (ЗАГЛУШЕНО)")
+    print("📊 ШАГ 5: ПАРСИНГ EXCEL СПЕЦИФИКАЦИИ")
     print("="*60)
-    print("⏭️ Пропускаем парсинг ifc_report.xlsx (зависит от обработки IFC)")
     
-    try:
-        xlsx_results = parse_and_aggregate_specification(session_folder)
-        results['xlsx_parser_results'] = xlsx_results
-        if xlsx_results.get('success'):
-            if xlsx_results.get('output_file'):
-                session_info['materials_excel_file'] = 'materials_summary.xlsx'
-                print(f"✅ Сводная таблица материалов создана: {session_info['materials_excel_file']}")
-            else:
-                print("ℹ️ Парсинг пропущен (IFC обработка заглушена)")
-    except Exception as e:
-        print(f"❌ Ошибка парсинга Excel спецификации: {e}")
-        session_info['xlsx_parser_error'] = str(e)
+    ifc_report_path = os.path.join(session_folder, 'ifc_report.xlsx')
+    
+    if os.path.exists(ifc_report_path):
+        print(f"\n📊 Парсинг отчета IFC: {os.path.basename(ifc_report_path)}")
+        try:
+            xlsx_results = parse_and_aggregate_specification(session_folder)
+            results['xlsx_parser_results'] = xlsx_results
+            session_info['materials_excel_file'] = xlsx_results.get('summary_filename') if xlsx_results else None
+            print(f"✅ Спецификация распарсена: {xlsx_results.get('summary_filename') if xlsx_results else 'N/A'}")
+        except Exception as e:
+            print(f"❌ Ошибка парсинга Excel спецификации: {e}")
+            session_info['xlsx_parser_error'] = str(e)
+            results['xlsx_parser_results'] = {'success': False, 'error': str(e), 'items': [], 'total_items': 0}
+    else:
+        print(f"⚠️ Файл ifc_report.xlsx не найден: {ifc_report_path}")
+        if not os.path.exists(ifc_folder) or not ifc_files_list:
+            print("⏭️ Файл ifc_report.xlsx не найден (IFC файлы не обрабатывались)")
+        print("✅ Пропускаем парсинг IFC отчета")
+        results['xlsx_parser_results'] = {
+            'success': False,
+            'skipped': True,
+            'reason': 'Файл ifc_report.xlsx не найден',
+            'items': [],
+            'total_items': 0
+        }
+        session_info['materials_excel_file'] = None
     
     # Save results
     results_path = os.path.join(session_folder, 'results.json')
@@ -239,7 +255,7 @@ def process_files():
         'text_pages_count': text_pages_count,
         'drawing_pages_count': drawing_pages_count,
         'drawings_folder_count': session_info.get('drawings_count', 0),
-        'ifc_processed': False,  # IFC обработка заглушена
+        'ifc_processed': session_info.get('ifc_excel_file') is not None,
         'pdf_classified': results['pdf_classification'] is not None,
         'xlsx_parsed': results['xlsx_parser_results'] is not None and results['xlsx_parser_results'].get('success', False)
     }
@@ -253,8 +269,8 @@ def process_files():
         'text_pages_count': text_pages_count,
         'drawing_pages_count': drawing_pages_count,
         'drawings_count': session_info.get('drawings_count', 0),
-        'ifc_processed': False,  # IFC обработка заглушена
-        'ifc_excel_file': None,  # IFC обработка заглушена
+        'ifc_processed': session_info.get('ifc_excel_file') is not None,
+        'ifc_excel_file': session_info.get('ifc_excel_file'),
         'materials_excel_file': session_info.get('materials_excel_file'),
         'pdf_classification': results['pdf_classification'],
         'xlsx_parser_results': results['xlsx_parser_results'],
