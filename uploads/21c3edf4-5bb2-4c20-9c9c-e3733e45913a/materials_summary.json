@@ -1,29 +1,88 @@
 {
   "success": true,
   "source_file": "ifc_report.xlsx",
-  "total_items_parsed": 3292,
-  "total_materials": 2,
+  "total_items": 10,
   "output_excel": "materials_summary.xlsx",
-  "materials": {
-    "Неизвестный материал": {
-      "group": "Другой",
-      "values": {
-        "pieces": {
-          "value": 1940.0,
-          "unit": "шт",
-          "element_count": 1940
-        }
-      }
+  "items": [
+    {
+      "type_ru": "Арматурные_сетки",
+      "ifc_class": "IfcReinforcingMesh",
+      "material": "Не указан",
+      "count": 55,
+      "volume": "-",
+      "area": "-"
     },
-    "Бетон": {
-      "group": "Бетон",
-      "values": {
-        "pieces": {
-          "value": 1352.0,
-          "unit": "шт",
-          "element_count": 1352
-        }
-      }
+    {
+      "type_ru": "Колонны",
+      "ifc_class": "IfcColumn",
+      "material": "Бетон",
+      "count": 32,
+      "volume": 643698.583,
+      "area": 1265682.415
+    },
+    {
+      "type_ru": "Лестницы",
+      "ifc_class": "IfcStair",
+      "material": "Бетон",
+      "count": 50,
+      "volume": "-",
+      "area": "-"
+    },
+    {
+      "type_ru": "Пандусы",
+      "ifc_class": "IfcRamp",
+      "material": "Бетон",
+      "count": 4,
+      "volume": "-",
+      "area": "-"
+    },
+    {
+      "type_ru": "Перекрытия",
+      "ifc_class": "IfcSlab",
+      "material": "Бетон",
+      "count": 119,
+      "volume": 2987992.324,
+      "area": 44171.162
+    },
+    {
+      "type_ru": "Перекрытия",
+      "ifc_class": "IfcSlab",
+      "material": "Не указан",
+      "count": 6,
+      "volume": 8869.183,
+      "area": 5640.589
+    },
+    {
+      "type_ru": "Проемы",
+      "ifc_class": "IfcOpeningElement",
+      "material": "Не указан",
+      "count": 490,
+      "volume": "-",
+      "area": "-"
+    },
+    {
+      "type_ru": "Прочие_элементы",
+      "ifc_class": "IfcBuildingElementProxy",
+      "material": "Не указан",
+      "count": 1291,
+      "volume": "-",
+      "area": "-"
+    },
+    {
+      "type_ru": "Стены",
+      "ifc_class": "IfcWall",
+      "material": "Бетон",
+      "count": 1147,
+      "volume": 2363579.814,
+      "area": 20253.419
+    },
+    {
+      "type_ru": "Стены",
+      "ifc_class": "IfcWall",
+      "material": "Не указан",
+      "count": 74,
+      "volume": 30568.661,
+      "area": 2715.508
     }
-  }
+  ]
 }
