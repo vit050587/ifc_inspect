@@ -1,1 +1,11 @@
-Nothing needs to be added to .gitignore since only a source file (frontend/index.html) was modified and there are no build artifacts, dependencies, or temporary files in the changes.
+```
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Excel files in uploads (assuming generated/cache files)
+uploads/**/*.xlsx
+uploads/**/*.xls
+```
