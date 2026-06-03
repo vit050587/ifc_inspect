@@ -196,17 +196,21 @@ def process_files():
     #                 print(f"❌ Ошибка парсинга IFC: {e}")
     #                 session_info['ifc_error'] = str(e)
     
-    # Step 5: Parse Excel specification and aggregate materials data
+    # Step 5: Parse Excel specification (ifc_report.xlsx) - ЗАГЛУШЕНО вместе с шагом 4
     print("\n" + "="*60)
-    print("📊 ШАГ 5: ПАРСИНГ EXCEL СПЕЦИФИКАЦИИ")
+    print("📊 ШАГ 5: ПАРСИНГ EXCEL СПЕЦИФИКАЦИИ (ЗАГЛУШЕНО)")
     print("="*60)
+    print("⏭️ Пропускаем парсинг ifc_report.xlsx (зависит от обработки IFC)")
     
     try:
         xlsx_results = parse_and_aggregate_specification(session_folder)
         results['xlsx_parser_results'] = xlsx_results
         if xlsx_results.get('success'):
-            session_info['materials_excel_file'] = 'materials_summary.xlsx'
-            print(f"✅ Сводная таблица материалов создана: {session_info['materials_excel_file']}")
+            if xlsx_results.get('output_file'):
+                session_info['materials_excel_file'] = 'materials_summary.xlsx'
+                print(f"✅ Сводная таблица материалов создана: {session_info['materials_excel_file']}")
+            else:
+                print("ℹ️ Парсинг пропущен (IFC обработка заглушена)")
     except Exception as e:
         print(f"❌ Ошибка парсинга Excel спецификации: {e}")
         session_info['xlsx_parser_error'] = str(e)
