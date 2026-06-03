@@ -1,18 +1,5 @@
-```
-# Uploads directory (contains temporary files)
-uploads/
+(frontend/index.html is a source file, and there are no build artifacts, dependencies, or temp files in the changes, so no .gitignore rules are needed)
 
-# Python cache
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
+```text
 
-# Logs
-*.log
-
-# Environment files
-.env
-.env.local
-*.env.*
 ```
