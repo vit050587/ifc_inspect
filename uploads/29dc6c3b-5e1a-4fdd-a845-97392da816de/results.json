@@ -3,7 +3,7 @@
   "drawing_pages": [],
   "ifc_results": {
     "success": true,
-    "excel_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/654b8f8a-8cf6-4408-ab53-889636e598c9/ifc_report.xlsx",
+    "excel_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/29dc6c3b-5e1a-4fdd-a845-97392da816de/ifc_report.xlsx",
     "excel_filename": "ifc_report.xlsx",
     "project_info": {
       "Name": "С-015/20",
@@ -14,17 +14,17 @@
       "CreationDate": "2009-04-22 23:24:48"
     },
     "elements_count": {
-      "IfcPlate": 103,
-      "IfcSlab": 330,
-      "IfcMember": 94,
       "IfcRamp": 6,
-      "IfcStairFlight": 125,
-      "IfcOpeningElement": 868,
       "IfcBeam": 116,
+      "IfcMember": 94,
       "IfcDiscreteAccessory": 50,
-      "IfcElementAssembly": 367,
+      "IfcSlab": 330,
+      "IfcStairFlight": 125,
+      "IfcColumn": 95,
+      "IfcOpeningElement": 868,
+      "IfcPlate": 103,
       "IfcWall": 1761,
-      "IfcColumn": 95
+      "IfcElementAssembly": 367
     },
     "total_elements": 3915,
     "materials_count": 0,
@@ -39,8 +39,8 @@
       "volume_statement": [
         {
           "filename": "ВОР КР.pdf",
-          "source_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/654b8f8a-8cf6-4408-ab53-889636e598c9/pdf_documents/ВОР КР.pdf",
-          "dest_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/654b8f8a-8cf6-4408-ab53-889636e598c9/volume_statement/ВОР КР.pdf",
+          "source_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/29dc6c3b-5e1a-4fdd-a845-97392da816de/pdf_documents/ВОР КР.pdf",
+          "dest_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/29dc6c3b-5e1a-4fdd-a845-97392da816de/volume_statement/ВОР КР.pdf",
           "category": "volume_statement",
           "pages_analyzed": 3,
           "file_size": 641279
@@ -49,8 +49,8 @@
       "explanatory_note": [
         {
           "filename": "Текстовая и графическая часть КР.pdf",
-          "source_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/654b8f8a-8cf6-4408-ab53-889636e598c9/pdf_documents/Текстовая и графическая часть КР.pdf",
-          "dest_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/654b8f8a-8cf6-4408-ab53-889636e598c9/explanatory_note/Текстовая и графическая часть КР.pdf",
+          "source_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/29dc6c3b-5e1a-4fdd-a845-97392da816de/pdf_documents/Текстовая и графическая часть КР.pdf",
+          "dest_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/29dc6c3b-5e1a-4fdd-a845-97392da816de/explanatory_note/Текстовая и графическая часть КР.pdf",
           "category": "explanatory_note",
           "pages_analyzed": 3,
           "file_size": 39964620
@@ -61,10 +61,10 @@
   "materials_summary": null,
   "xlsx_parser_results": {
     "success": true,
-    "excel_file_found": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/654b8f8a-8cf6-4408-ab53-889636e598c9/ifc_report.xlsx",
+    "excel_file_found": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/29dc6c3b-5e1a-4fdd-a845-97392da816de/ifc_report.xlsx",
     "parsed_items": 21,
     "aggregated_materials": 21,
-    "output_file": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/654b8f8a-8cf6-4408-ab53-889636e598c9/materials_summary.xlsx",
+    "output_file": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/29dc6c3b-5e1a-4fdd-a845-97392da816de/materials_summary.xlsx",
     "materials_summary": [
       {
         "type_ru": "Балки",
