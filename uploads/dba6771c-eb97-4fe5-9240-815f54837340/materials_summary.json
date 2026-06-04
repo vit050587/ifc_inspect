@@ -1,0 +1,217 @@
+{
+  "success": true,
+  "source_file": "ifc_report.xlsx",
+  "total_items": 19,
+  "output_excel": "materials_summary.xlsx",
+  "items": [
+    {
+      "type_ru": "Арматурные_сетки",
+      "ifc_class": "IfcReinforcingMesh",
+      "material": "Не указан",
+      "concrete_grade": "-",
+      "freeze_durability": "-",
+      "water_resist": "-",
+      "count": 55,
+      "volume": "-",
+      "area": "-"
+    },
+    {
+      "type_ru": "Колонны",
+      "ifc_class": "IfcColumn",
+      "material": "Бетон В30 F150 W6",
+      "concrete_grade": "В30",
+      "freeze_durability": "F150",
+      "water_resist": "W6",
+      "count": 32,
+      "volume": 643698.583,
+      "area": 1265682.415
+    },
+    {
+      "type_ru": "Лестницы",
+      "ifc_class": "IfcStair",
+      "material": "Бетон",
+      "concrete_grade": "-",
+      "freeze_durability": "-",
+      "water_resist": "-",
+      "count": 50,
+      "volume": "-",
+      "area": "-"
+    },
+    {
+      "type_ru": "Пандусы",
+      "ifc_class": "IfcRamp",
+      "material": "Бетон В30",
+      "concrete_grade": "В30",
+      "freeze_durability": "-",
+      "water_resist": "-",
+      "count": 4,
+      "volume": "-",
+      "area": "-"
+    },
+    {
+      "type_ru": "Перекрытия",
+      "ifc_class": "IfcSlab",
+      "material": "Бетон",
+      "concrete_grade": "-",
+      "freeze_durability": "-",
+      "water_resist": "-",
+      "count": 1,
+      "volume": 0.364,
+      "area": 8.449
+    },
+    {
+      "type_ru": "Перекрытия",
+      "ifc_class": "IfcSlab",
+      "material": "Бетон В10",
+      "concrete_grade": "В10",
+      "freeze_durability": "-",
+      "water_resist": "-",
+      "count": 7,
+      "volume": 66216.485,
+      "area": 5002.652
+    },
+    {
+      "type_ru": "Перекрытия",
+      "ifc_class": "IfcSlab",
+      "material": "Бетон В10 W6",
+      "concrete_grade": "В10",
+      "freeze_durability": "-",
+      "water_resist": "W6",
+      "count": 1,
+      "volume": 13.597,
+      "area": 276.342
+    },
+    {
+      "type_ru": "Перекрытия",
+      "ifc_class": "IfcSlab",
+      "material": "Бетон В25 F100 W4",
+      "concrete_grade": "В25",
+      "freeze_durability": "F100",
+      "water_resist": "W4",
+      "count": 45,
+      "volume": 15036.81,
+      "area": 342.239
+    },
+    {
+      "type_ru": "Перекрытия",
+      "ifc_class": "IfcSlab",
+      "material": "Бетон В25 F100 W6",
+      "concrete_grade": "В25",
+      "freeze_durability": "F100",
+      "water_resist": "W6",
+      "count": 21,
+      "volume": 2243920.319,
+      "area": 23628.758
+    },
+    {
+      "type_ru": "Перекрытия",
+      "ifc_class": "IfcSlab",
+      "material": "Бетон В30 F150 W6",
+      "concrete_grade": "В30",
+      "freeze_durability": "F150",
+      "water_resist": "W6",
+      "count": 21,
+      "volume": 272423.156,
+      "area": 10344.024
+    },
+    {
+      "type_ru": "Перекрытия",
+      "ifc_class": "IfcSlab",
+      "material": "Бетон В35 F150 W6",
+      "concrete_grade": "В35",
+      "freeze_durability": "F150",
+      "water_resist": "W6",
+      "count": 23,
+      "volume": 390381.593,
+      "area": 4568.696
+    },
+    {
+      "type_ru": "Перекрытия",
+      "ifc_class": "IfcSlab",
+      "material": "Не указан",
+      "concrete_grade": "-",
+      "freeze_durability": "-",
+      "water_resist": "-",
+      "count": 6,
+      "volume": 8869.183,
+      "area": 5640.589
+    },
+    {
+      "type_ru": "Проемы",
+      "ifc_class": "IfcOpeningElement",
+      "material": "Не указан",
+      "concrete_grade": "В30",
+      "freeze_durability": "-",
+      "water_resist": "-",
+      "count": 335,
+      "volume": "-",
+      "area": "-"
+    },
+    {
+      "type_ru": "Проемы",
+      "ifc_class": "IfcOpeningElement",
+      "material": "Не указан",
+      "concrete_grade": "-",
+      "freeze_durability": "-",
+      "water_resist": "-",
+      "count": 3,
+      "volume": "-",
+      "area": "-"
+    },
+    {
+      "type_ru": "Проемы",
+      "ifc_class": "IfcOpeningElement",
+      "material": "Не указан",
+      "concrete_grade": "В35",
+      "freeze_durability": "-",
+      "water_resist": "-",
+      "count": 152,
+      "volume": "-",
+      "area": "-"
+    },
+    {
+      "type_ru": "Прочие_элементы",
+      "ifc_class": "IfcBuildingElementProxy",
+      "material": "Не указан",
+      "concrete_grade": "-",
+      "freeze_durability": "-",
+      "water_resist": "-",
+      "count": 1291,
+      "volume": "-",
+      "area": "-"
+    },
+    {
+      "type_ru": "Стены",
+      "ifc_class": "IfcWall",
+      "material": "Бетон В30 F150 W6",
+      "concrete_grade": "В30",
+      "freeze_durability": "F150",
+      "water_resist": "W6",
+      "count": 984,
+      "volume": 1752340.901,
+      "area": 15738.991
+    },
+    {
+      "type_ru": "Стены",
+      "ifc_class": "IfcWall",
+      "material": "Бетон В35 F150 W6",
+      "concrete_grade": "В35",
+      "freeze_durability": "F150",
+      "water_resist": "W6",
+      "count": 163,
+      "volume": 611238.913,
+      "area": 4514.428
+    },
+    {
+      "type_ru": "Стены",
+      "ifc_class": "IfcWall",
+      "material": "Не указан",
+      "concrete_grade": "-",
+      "freeze_durability": "-",
+      "water_resist": "-",
+      "count": 74,
+      "volume": 30568.661,
+      "area": 2715.508
+    }
+  ]
+}
