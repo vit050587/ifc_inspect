@@ -3,7 +3,7 @@
   "drawing_pages": [],
   "ifc_results": {
     "success": true,
-    "excel_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/384edf8f-ae4d-4ba9-9632-790977e6a93a/ifc_report.xlsx",
+    "excel_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/654b8f8a-8cf6-4408-ab53-889636e598c9/ifc_report.xlsx",
     "excel_filename": "ifc_report.xlsx",
     "project_info": {
       "Name": "С-015/20",
@@ -14,16 +14,16 @@
       "CreationDate": "2009-04-22 23:24:48"
     },
     "elements_count": {
-      "IfcRamp": 6,
-      "IfcMember": 94,
-      "IfcElementAssembly": 367,
       "IfcPlate": 103,
+      "IfcSlab": 330,
+      "IfcMember": 94,
+      "IfcRamp": 6,
       "IfcStairFlight": 125,
       "IfcOpeningElement": 868,
       "IfcBeam": 116,
-      "IfcWall": 1761,
       "IfcDiscreteAccessory": 50,
-      "IfcSlab": 330,
+      "IfcElementAssembly": 367,
+      "IfcWall": 1761,
       "IfcColumn": 95
     },
     "total_elements": 3915,
@@ -39,8 +39,8 @@
       "volume_statement": [
         {
           "filename": "ВОР КР.pdf",
-          "source_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/384edf8f-ae4d-4ba9-9632-790977e6a93a/pdf_documents/ВОР КР.pdf",
-          "dest_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/384edf8f-ae4d-4ba9-9632-790977e6a93a/volume_statement/ВОР КР.pdf",
+          "source_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/654b8f8a-8cf6-4408-ab53-889636e598c9/pdf_documents/ВОР КР.pdf",
+          "dest_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/654b8f8a-8cf6-4408-ab53-889636e598c9/volume_statement/ВОР КР.pdf",
           "category": "volume_statement",
           "pages_analyzed": 3,
           "file_size": 641279
@@ -49,8 +49,8 @@
       "explanatory_note": [
         {
           "filename": "Текстовая и графическая часть КР.pdf",
-          "source_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/384edf8f-ae4d-4ba9-9632-790977e6a93a/pdf_documents/Текстовая и графическая часть КР.pdf",
-          "dest_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/384edf8f-ae4d-4ba9-9632-790977e6a93a/explanatory_note/Текстовая и графическая часть КР.pdf",
+          "source_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/654b8f8a-8cf6-4408-ab53-889636e598c9/pdf_documents/Текстовая и графическая часть КР.pdf",
+          "dest_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/654b8f8a-8cf6-4408-ab53-889636e598c9/explanatory_note/Текстовая и графическая часть КР.pdf",
           "category": "explanatory_note",
           "pages_analyzed": 3,
           "file_size": 39964620
@@ -61,15 +61,18 @@
   "materials_summary": null,
   "xlsx_parser_results": {
     "success": true,
-    "excel_file_found": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/384edf8f-ae4d-4ba9-9632-790977e6a93a/ifc_report.xlsx",
+    "excel_file_found": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/654b8f8a-8cf6-4408-ab53-889636e598c9/ifc_report.xlsx",
     "parsed_items": 21,
     "aggregated_materials": 21,
-    "output_file": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/384edf8f-ae4d-4ba9-9632-790977e6a93a/materials_summary.xlsx",
+    "output_file": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/654b8f8a-8cf6-4408-ab53-889636e598c9/materials_summary.xlsx",
     "materials_summary": [
       {
         "type_ru": "Балки",
         "ifc_class": "IfcBeam",
-        "material": "Железобетон B25",
+        "material": "Железобетон B25 F100 W6",
+        "concrete_grade": "B25",
+        "freeze_durability": "F100",
+        "water_resist": "W6",
         "count": 39,
         "volume": 12667.114,
         "area": 152394440.0
@@ -77,7 +80,10 @@
       {
         "type_ru": "Балки",
         "ifc_class": "IfcBeam",
-        "material": "Железобетон B30",
+        "material": "Железобетон B30 F150 W8",
+        "concrete_grade": "B30",
+        "freeze_durability": "F150",
+        "water_resist": "W8",
         "count": 31,
         "volume": 2778.396,
         "area": 70254484.55
@@ -86,6 +92,9 @@
         "type_ru": "Балки",
         "ifc_class": "IfcBeam",
         "material": "Сталь",
+        "concrete_grade": "-",
+        "freeze_durability": "-",
+        "water_resist": "-",
         "count": 46,
         "volume": 164.1,
         "area": 45318532.299
@@ -93,7 +102,10 @@
       {
         "type_ru": "Колонны",
         "ifc_class": "IfcColumn",
-        "material": "Железобетон B30",
+        "material": "Железобетон B30 F150 W8",
+        "concrete_grade": "B30",
+        "freeze_durability": "F150",
+        "water_resist": "W8",
         "count": 3,
         "volume": "-",
         "area": "-"
@@ -102,6 +114,9 @@
         "type_ru": "Колонны",
         "ifc_class": "IfcColumn",
         "material": "М",
+        "concrete_grade": "B30",
+        "freeze_durability": "F150",
+        "water_resist": "W8",
         "count": 56,
         "volume": 1014938.63,
         "area": 1735925.197
@@ -110,6 +125,9 @@
         "type_ru": "Колонны",
         "ifc_class": "IfcColumn",
         "material": "Сталь",
+        "concrete_grade": "-",
+        "freeze_durability": "-",
+        "water_resist": "-",
         "count": 36,
         "volume": 0.066,
         "area": "-"
@@ -118,6 +136,9 @@
         "type_ru": "Лестничные_марши",
         "ifc_class": "IfcStairFlight",
         "material": "Железобетон",
+        "concrete_grade": "-",
+        "freeze_durability": "-",
+        "water_resist": "-",
         "count": 63,
         "volume": 54399.948,
         "area": "-"
@@ -126,6 +147,9 @@
         "type_ru": "Лестничные_марши",
         "ifc_class": "IfcStairFlight",
         "material": "Сборный железобетон",
+        "concrete_grade": "-",
+        "freeze_durability": "-",
+        "water_resist": "-",
         "count": 62,
         "volume": 4338.062,
         "area": "-"
@@ -134,6 +158,9 @@
         "type_ru": "Пандусы",
         "ifc_class": "IfcRamp",
         "material": "Железобетон",
+        "concrete_grade": "-",
+        "freeze_durability": "-",
+        "water_resist": "-",
         "count": 5,
         "volume": "-",
         "area": "-"
@@ -142,6 +169,9 @@
         "type_ru": "Пандусы",
         "ifc_class": "IfcRamp",
         "material": "Железобетон В30",
+        "concrete_grade": "В30",
+        "freeze_durability": "-",
+        "water_resist": "-",
         "count": 1,
         "volume": "-",
         "area": "-"
@@ -149,7 +179,10 @@
       {
         "type_ru": "Перекрытия",
         "ifc_class": "IfcSlab",
-        "material": "Железобетон B25",
+        "material": "Железобетон B25 F100 W6",
+        "concrete_grade": "B25",
+        "freeze_durability": "F100",
+        "water_resist": "W6",
         "count": 185,
         "volume": 3152015.753,
         "area": 33499.008
@@ -157,7 +190,10 @@
       {
         "type_ru": "Перекрытия",
         "ifc_class": "IfcSlab",
-        "material": "Железобетон B30",
+        "material": "Железобетон B30 F150 W8",
+        "concrete_grade": "B30",
+        "freeze_durability": "F150",
+        "water_resist": "W8",
         "count": 90,
         "volume": 3204423.625,
         "area": 15373.627
@@ -166,6 +202,9 @@
         "type_ru": "Перекрытия",
         "ifc_class": "IfcSlab",
         "material": "ПОД",
+        "concrete_grade": "B15",
+        "freeze_durability": "F150",
+        "water_resist": "W8",
         "count": 15,
         "volume": 8807.267,
         "area": 8279.956
@@ -174,6 +213,9 @@
         "type_ru": "Перекрытия",
         "ifc_class": "IfcSlab",
         "material": "Экструдированный пенополистирол",
+        "concrete_grade": "-",
+        "freeze_durability": "-",
+        "water_resist": "-",
         "count": 40,
         "volume": 470.273,
         "area": 359.025
@@ -182,6 +224,9 @@
         "type_ru": "Плиты",
         "ifc_class": "IfcPlate",
         "material": "Не указан",
+        "concrete_grade": "-",
+        "freeze_durability": "-",
+        "water_resist": "-",
         "count": 103,
         "volume": "-",
         "area": "-"
@@ -190,6 +235,9 @@
         "type_ru": "Проемы",
         "ifc_class": "IfcOpeningElement",
         "material": "Не указан",
+        "concrete_grade": "-",
+        "freeze_durability": "-",
+        "water_resist": "-",
         "count": 868,
         "volume": "-",
         "area": "-"
@@ -198,6 +246,9 @@
         "type_ru": "Прочие_элементы",
         "ifc_class": "IfcDiscreteAccessory",
         "material": "Не указан",
+        "concrete_grade": "-",
+        "freeze_durability": "-",
+        "water_resist": "-",
         "count": 50,
         "volume": "-",
         "area": "-"
@@ -206,6 +257,9 @@
         "type_ru": "Прочие_элементы",
         "ifc_class": "IfcElementAssembly",
         "material": "Не указан",
+        "concrete_grade": "-",
+        "freeze_durability": "-",
+        "water_resist": "-",
         "count": 367,
         "volume": "-",
         "area": "-"
@@ -213,7 +267,10 @@
       {
         "type_ru": "Стены",
         "ifc_class": "IfcWall",
-        "material": "Железобетон B25",
+        "material": "Железобетон B25 F100 W6",
+        "concrete_grade": "B25",
+        "freeze_durability": "F100",
+        "water_resist": "W6",
         "count": 1468,
         "volume": 2572814.24,
         "area": 24800.867
@@ -221,7 +278,10 @@
       {
         "type_ru": "Стены",
         "ifc_class": "IfcWall",
-        "material": "Железобетон B30",
+        "material": "Железобетон B30 F150 W8",
+        "concrete_grade": "B30",
+        "freeze_durability": "F150",
+        "water_resist": "W8",
         "count": 293,
         "volume": 1338410.945,
         "area": 10907.351
@@ -230,6 +290,9 @@
         "type_ru": "Элементы_каркаса",
         "ifc_class": "IfcMember",
         "material": "Не указан",
+        "concrete_grade": "-",
+        "freeze_durability": "-",
+        "water_resist": "-",
         "count": 94,
         "volume": 3.541,
         "area": 321000.0
