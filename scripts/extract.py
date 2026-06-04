@@ -94,17 +94,33 @@ def classify_element(element, name):
     name_upper = name.upper() if name else ""
     
     if element_type == "IfcSlab":
-        if any(x in name_upper for x in ["ФП", "ФУНДАМЕНТ", "FOUNDATION SLAB", "BASE SLAB"]):
-            return "Фундамент_Плита"
-        if any(x in name_upper for x in ["ПОДГОТОВКА", "ПОДСТЫЛАЮЩИЙ", "SAND LAYER", "GRAVEL LAYER", "LEAN CONCRETE"]):
-            if "ПЕСОК" in name_upper or "SAND" in name_upper:
+        # Приоритет 1: Лестничные площадки (должны быть отдельно)
+        if "ЛЕСТНИЧ" in name_upper or "STAIR" in name_upper or "ПЛОЩАДКА" in name_upper:
+            return "Лестница_Площадка"
+        
+        # Приоритет 2: Подготовка фундамента (песок, щебень, тощий бетон, стяжка)
+        if "ПОДГОТОВКА" in name_upper or "СТЯЖКА" in name_upper:
+            if "ПЕСОК" in name_upper or "SAND" in name_upper or "ЦЕМЕНТНО-ПЕСЧАНАЯ" in name_upper:
                 return "Фундамент_Подготовка_Песок"
-            elif "ЩЕБЕНЬ" in name_upper or "GRAVEL" in name_upper:
+            elif "ЩЕБЕНЬ" in name_upper or "GRAVEL" in name_upper or "CRUSHED" in name_upper:
                 return "Фундамент_Подготовка_Щебень"
             else:
                 return "Фундамент_Подготовка_Бетон"
-        if any(x in name_upper for x in ["ПЕРЕКРЫТИЕ", "FLOOR", "ROOF", "SLAB"]):
-            return "Перекрытие_Плита"
+        
+        # Приоритет 3: Фундаментные плиты (ищем явные маркеры фундамента)
+        # Важно: проверяем наличие "ФП" но не в контексте подготовки
+        if ("ФУНДАМЕНТ" in name_upper and "ПОДГОТОВКА" not in name_upper) or \
+           "FOUNDATION SLAB" in name_upper or \
+           "BASE SLAB" in name_upper or \
+           "ФУНДАМЕНТНАЯ ПЛИТА" in name_upper:
+            return "Фундамент_Плита"
+        
+        # Проверяем "ФП" отдельно - это может быть как фундаментная плита так и "перекрытие с ФП"
+        # Если есть "ФП" и нет "перекрытие" - считаем фундаментом
+        if "ФП" in name_upper and "ПЕРЕКРЫТИЕ" not in name_upper and "ПОДГОТОВКА" not in name_upper:
+            return "Фундамент_Плита"
+        
+        # Приоритет 4: Перекрытия (по умолчанию для плит)
         return "Перекрытие_Плита"
     
     if element_type == "IfcWall":
@@ -112,7 +128,7 @@ def classify_element(element, name):
     if element_type == "IfcColumn":
         return "Колонна"
     if element_type in ["IfcStair", "IfcStairFlight"]:
-        return "Лестница"
+        return "Лестница_Марш"
     if element_type == "IfcBeam":
         return "Балка"
         
@@ -244,6 +260,17 @@ def main():
     summary_df.to_excel(EXCEL_OUTPUT, index=False, sheet_name="Сводная")
     print(f"Сводная таблица сохранена в {EXCEL_OUTPUT}")
     
+    # Удаление листа сравнения если он существует (требование пользователя)
+    try:
+        with pd.ExcelWriter(EXCEL_OUTPUT, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+            # Перезаписываем только лист "Сводная", удаляя другие если они были добавлены ранее
+            book = writer.book
+            if "Сравнение с целью" in book.sheetnames:
+                del book["Сравнение с целью"]
+            summary_df.to_excel(writer, index=False, sheet_name="Сводная")
+    except Exception as e:
+        print(f"Предупреждение при очистке лишних листов: {e}")
+
     print("\n--- ИТОГИ ПО КАТЕГОРИЯМ ---")
     totals = summary_df.groupby("category").agg(
         total_count=("count", "sum"),
