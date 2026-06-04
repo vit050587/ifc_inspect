@@ -7,6 +7,7 @@ Generates Excel report with separate sheets for each element type:
   - Beams (Балки)
   - Stairs (Лестницы)
   - Ramps (Пандусы)
+  - Foundations (Фундаменты) - includes IfcFooting, IfcPile, and IfcSlab with BASESLAB type
   - Other (Остальные)
 
 Each sheet contains ALL parameters for elements of that type.
@@ -199,8 +200,14 @@ ELEMENT_TYPE_MAPPING = {
 DEFAULT_SHEET_NAME = 'Остальные'
 
 
-def get_sheet_name_for_element(ifc_class):
-    """Map IFC class to Russian sheet name."""
+def get_sheet_name_for_element(ifc_class, element=None):
+    """Map IFC class to Russian sheet name with special handling for slab types."""
+    # Special handling for IfcSlab based on PredefinedType
+    if ifc_class == 'IfcSlab' and element:
+        predefined_type = getattr(element, 'PredefinedType', None)
+        if predefined_type == 'BASESLAB':
+            return 'Фундаменты'  # Using simple name without / character
+    
     return ELEMENT_TYPE_MAPPING.get(ifc_class, DEFAULT_SHEET_NAME)
 
 
@@ -239,7 +246,7 @@ def parse_ifc_to_sheets(ifc_path, output_excel_path):
             print(f"Processing element {i} / {len(all_elements)}")
         
         ifc_class = elem.is_a()
-        sheet_name = get_sheet_name_for_element(ifc_class)
+        sheet_name = get_sheet_name_for_element(ifc_class, elem)
         
         # Skip non-structural elements for the main sheets
         if sheet_name == DEFAULT_SHEET_NAME and ifc_class not in ['IfcBuildingElementProxy']:

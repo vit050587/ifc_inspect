@@ -1,24 +1,15 @@
-```
-# Python
-__pycache__/
+```gitignore
+# Compiled and build artifacts
 *.pyc
-*.pyo
-*.pyd
+__pycache__/
 
-# Logs and temp files
-*.log
-*.tmp
-
-# Environment
-.env
-.env.local
-.env.*
-
-# Editors
-.vscode/
-.idea/
-
-# Dependencies
-.venv/
-venv/
+# Excel files (binary format)
+*.xlsx
+*.xls
+*.xlsm
+*.xlsb
+*.xlt
+*.xltm
+*.xltx
+*.csv
 ```
