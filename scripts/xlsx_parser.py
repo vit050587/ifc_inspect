@@ -3,10 +3,15 @@
 Скрипт парсинга Excel файлов отчетов IFC (ifc_report.xlsx).
 Создает сводную таблицу по типам элементов, материалам с количеством, объемом и площадью.
 Для несущих элементов из монолитного железобетона (стены, перекрытия, колонны, фундаменты)
-добавляет характеристики материала: класс бетона, морозостойкость, водонепроницаемость.
+извлекает характеристики материала: класс бетона, морозостойкость, водонепроницаемость.
 
 Формат выходной таблицы:
-Тип (RU) | Тип элемента | Материал | Класс бетона | Морозостойкость | Водонепроницаемость | Количество, шт | Объем, м³ | Площадь, м²
+Тип (RU) | Тип элемента | Материал (с характеристиками: Бетон В30 F150 W6) | Количество, шт | Объем, м³ | Площадь, м²
+
+Характеристики бетона извлекаются:
+1. Из названий колонок Qto_*:Бетон В30 F150 W8 (формат файла 1)
+2. Из отдельных колонок ExpCheck_MaterialConcrete:MGE_ConcreteGrade/FreezeDurability/WaterResist (формат файла 2)
+3. Из Element Specific:Name или ObjectType (резервный вариант)
 """
 
 import os
@@ -71,30 +76,106 @@ def find_ifc_report_file(session_folder: str) -> Optional[str]:
     return str(report_path)
 
 
-def get_material_with_grade(row: pd.Series, ifc_class: str, base_material_col: str) -> Tuple[str, Optional[str], Optional[str], Optional[str]]:
+def extract_concrete_properties_from_name(material_name: str) -> Tuple[str, Optional[str], Optional[str], Optional[str]]:
     """
-    Получает полное имя материала с учетом марки (grade) и характеристик бетона.
+    Извлекает характеристики бетона из названия материала.
     
-    Логика:
-    1. Берем базовый материал из ExpCheck_{Class}:MGE_Material
-    2. Если это 'Бетон' или подобный материал - добавляем марку из ExpCheck_MaterialConcrete:MGE_ConcreteGrade
-    3. Если марки нет в стандартной колонке, пытаемся извлечь из Element Specific:Name или ObjectType
-    4. Возвращаем комбинированное имя типа 'Бетон В35' или просто 'Бетон' если марки нет
+    Примеры входных данных:
+    - "Бетон В30 F150 W8"
+    - "Бетон B35 W6 F150 Гранит"
+    - "Бетон В7.5 неармированный"
+    - "02_Бетон B30 W6 F150 Гравий"
     
     Returns:
         Tuple[str, Optional[str], Optional[str], Optional[str]]: 
-            (материал_с_маркой, класс_бетона, морозостойкость, водонепроницаемость)
+            (очищенное_имя_материала, класс_бетона, морозостойкость, водонепроницаемость)
     """
-    import re
+    if not material_name or not isinstance(material_name, str):
+        return material_name, None, None, None
     
+    original_name = material_name.strip()
+    
+    # Паттерны для извлечения характеристик
+    # Класс бетона: В20, В25, В30, В35, В40, B10, B15, B20, B25, B30, B35, B40 (русская или латинская В)
+    grade_pattern = r'\b([BВ]\d+(?:\.\d+)?)\b'
+    # Морозостойкость: F100, F150, F200, F250, F300
+    freeze_pattern = r'\b(F\d+)\b'
+    # Водонепроницаемость: W4, W6, W8, W10, W12, W14, W20
+    water_pattern = r'\b(W\d+)\b'
+    
+    concrete_grade = None
+    freeze_durability = None
+    water_resist = None
+    
+    # Ищем характеристики в названии
+    grade_match = re.search(grade_pattern, original_name)
+    if grade_match:
+        concrete_grade = grade_match.group(1)
+        # Нормализуем: заменяем латинскую B на русскую В
+        if concrete_grade.startswith('B') and not concrete_grade.startswith('В'):
+            concrete_grade = 'В' + concrete_grade[1:]
+    
+    freeze_match = re.search(freeze_pattern, original_name)
+    if freeze_match:
+        freeze_durability = freeze_match.group(1)
+    
+    water_match = re.search(water_pattern, original_name)
+    if water_match:
+        water_resist = water_match.group(1)
+    
+    # Очищаем название от характеристик для базового имени
+    clean_name = original_name
+    # Удаляем найденные характеристики из названия
+    if grade_match:
+        clean_name = re.sub(re.escape(grade_match.group(0)), '', clean_name)
+    if freeze_match:
+        clean_name = re.sub(re.escape(freeze_match.group(0)), '', clean_name)
+    if water_match:
+        clean_name = re.sub(re.escape(water_match.group(0)), '', clean_name)
+    
+    # Удаляем лишние пробелы и спецсимволы
+    clean_name = re.sub(r'\s+', ' ', clean_name).strip()
+    clean_name = re.sub(r'^02_|^03_|^30_|^31_', '', clean_name)  # Удаляем префиксы номеров групп
+    clean_name = clean_name.strip('_').strip()
+    
+    # Если материал содержит "Бетон" и есть характеристики - формируем полное имя
+    if 'бетон' in clean_name.lower() or 'раствор' in clean_name.lower():
+        if concrete_grade or freeze_durability or water_resist:
+            # Формируем итоговое название: "Бетон В30 F150 W6"
+            parts = [clean_name] if clean_name else ['Бетон']
+            if concrete_grade:
+                parts.append(concrete_grade)
+            if freeze_durability:
+                parts.append(freeze_durability)
+            if water_resist:
+                parts.append(water_resist)
+            return ' '.join(parts), concrete_grade, freeze_durability, water_resist
+    
+    return clean_name if clean_name else original_name, concrete_grade, freeze_durability, water_resist
+
+
+def get_material_with_properties(row: pd.Series, ifc_class: str, material_col: str) -> Tuple[str, Optional[str], Optional[str], Optional[str]]:
+    """
+    Получает полное имя материала с характеристиками бетона.
+    
+    Логика:
+    1. Берем материал из указанной колонки
+    2. Пытаемся извлечь характеристики из названия материала (regex)
+    3. Если характеристик нет в названии, ищем в стандартных колонках MGE_*
+    4. Возвращаем комбинированное имя типа "Бетон В30 F150 W6"
+    
+    Returns:
+        Tuple[str, Optional[str], Optional[str], Optional[str]]: 
+            (материал_с_характеристиками, класс_бетона, морозостойкость, водонепроницаемость)
+    """
     # Получаем базовый материал
     base_material = 'Не указан'
-    if base_material_col in row.index:
-        mat_val = row.get(base_material_col)
+    if material_col in row.index:
+        mat_val = row.get(material_col)
         if mat_val and str(mat_val) != '0' and str(mat_val) != 'nan' and str(mat_val).strip():
             base_material = str(mat_val).strip()
     
-    # Если материал не указан или '0', пытаемся найти альтернативную колонку MGE_Material
+    # Если материал не указан, пытаемся найти альтернативную колонку MGE_Material
     if base_material == 'Не указан' or base_material == '0':
         for col in row.index:
             if 'MGE_Material' in col and ifc_class[3:] in col:
@@ -103,68 +184,79 @@ def get_material_with_grade(row: pd.Series, ifc_class: str, base_material_col: s
                     base_material = str(mat_val).strip()
                     break
     
-    # Инициализируем характеристики бетона
+    # Сначала пробуем извлечь характеристики из названия материала
+    clean_material, grade_from_name, freeze_from_name, water_from_name = \
+        extract_concrete_properties_from_name(base_material)
+    
+    # Если характеристики найдены в названии - возвращаем их
+    if grade_from_name or freeze_from_name or water_from_name:
+        return clean_material, grade_from_name, freeze_from_name, water_from_name
+    
+    # Если характеристик нет в названии, ищем в стандартных колонках MGE_*
     concrete_grade = None
     freeze_durability = None
     water_resist = None
     
-    # Если базовый материал - бетон или раствор, добавляем марку и характеристики
-    concrete_like = ['бетон', 'раствор', 'смесь']
-    if any(x in base_material.lower() for x in concrete_like):
-        grade = None
-        
-        # Сначала ищем марку в стандартной колонке ExpCheck_MaterialConcrete:MGE_ConcreteGrade
-        grade_col = 'ExpCheck_MaterialConcrete:MGE_ConcreteGrade'
-        if grade_col in row.index:
-            grade_val = row.get(grade_col)
-            if grade_val and str(grade_val) != '0' and str(grade_val) != 'nan' and str(grade_val).strip():
-                grade = str(grade_val).strip()
-                concrete_grade = grade
-        
-        # Ищем морозостойкость F***
-        freeze_col = 'ExpCheck_MaterialConcrete:MGE_FreezeDurability'
-        if freeze_col in row.index:
-            freeze_val = row.get(freeze_col)
-            if freeze_val and str(freeze_val) != '0' and str(freeze_val) != 'nan' and str(freeze_val).strip():
-                freeze_durability = str(freeze_val).strip()
-        
-        # Ищем водонепроницаемость W**
-        water_col = 'ExpCheck_MaterialConcrete:MGE_WaterResist'
-        if water_col in row.index:
-            water_val = row.get(water_col)
-            if water_val and str(water_val) != '0' and str(water_val) != 'nan' and str(water_val).strip():
-                water_resist = str(water_val).strip()
-        
-        # Если марки нет в стандартной колонке, пытаемся извлечь из Element Specific:Name
-        if not grade or grade == '0':
-            name_col = 'Element Specific:Name'
-            if name_col in row.index:
-                elem_name = row.get(name_col)
-                if elem_name and str(elem_name) != 'nan' and str(elem_name).strip():
-                    elem_name = str(elem_name)
-                    # Ищем паттерн типа "В20", "В25", "В30", "В35", "М100" и т.д.
-                    grade_match = re.search(r'\b([BВ]\d+|[MМ]\d+)\b', elem_name)
-                    if grade_match:
-                        grade = grade_match.group(1)
-                        concrete_grade = grade
-        
-        # Если все еще нет марки, пробуем ObjectType
-        if not grade or grade == '0':
-            type_col = 'Element Specific:ObjectType'
-            if type_col in row.index:
-                obj_type = row.get(type_col)
-                if obj_type and str(obj_type) != 'nan' and str(obj_type).strip():
-                    obj_type = str(obj_type)
-                    grade_match = re.search(r'\b([BВ]\d+|[MМ]\d+)\b', obj_type)
-                    if grade_match:
-                        grade = grade_match.group(1)
-                        concrete_grade = grade
-        
-        # Если нашли марку, комбинируем с материалом
-        if grade and grade != '0':
-            return f"{base_material} {grade}", concrete_grade, freeze_durability, water_resist
+    # Ищем морозостойкость F***
+    freeze_col = 'ExpCheck_MaterialConcrete:MGE_FreezeDurability'
+    if freeze_col in row.index:
+        freeze_val = row.get(freeze_col)
+        if freeze_val and str(freeze_val) != '0' and str(freeze_val) != 'nan' and str(freeze_val).strip():
+            freeze_durability = str(freeze_val).strip()
     
-    return base_material, concrete_grade, freeze_durability, water_resist
+    # Ищем водонепроницаемость W**
+    water_col = 'ExpCheck_MaterialConcrete:MGE_WaterResist'
+    if water_col in row.index:
+        water_val = row.get(water_col)
+        if water_val and str(water_val) != '0' and str(water_val) != 'nan' and str(water_val).strip():
+            water_resist = str(water_val).strip()
+    
+    # Ищем класс бетона
+    grade_col = 'ExpCheck_MaterialConcrete:MGE_ConcreteGrade'
+    if grade_col in row.index:
+        grade_val = row.get(grade_col)
+        if grade_val and str(grade_val) != '0' and str(grade_val) != 'nan' and str(grade_val).strip():
+            concrete_grade = str(grade_val).strip()
+    
+    # Если марки нет в стандартной колонке, пытаемся извлечь из Element Specific:Name
+    if not concrete_grade:
+        name_col = 'Element Specific:Name'
+        if name_col in row.index:
+            elem_name = row.get(name_col)
+            if elem_name and str(elem_name) != 'nan' and str(elem_name).strip():
+                elem_name = str(elem_name)
+                grade_match = re.search(r'\b([BВ]\d+(?:\.\d+)?)\b', elem_name)
+                if grade_match:
+                    concrete_grade = grade_match.group(1)
+                    if concrete_grade.startswith('B') and not concrete_grade.startswith('В'):
+                        concrete_grade = 'В' + concrete_grade[1:]
+    
+    # Если все еще нет марки, пробуем ObjectType
+    if not concrete_grade:
+        type_col = 'Element Specific:ObjectType'
+        if type_col in row.index:
+            obj_type = row.get(type_col)
+            if obj_type and str(obj_type) != 'nan' and str(obj_type).strip():
+                obj_type = str(obj_type)
+                grade_match = re.search(r'\b([BВ]\d+(?:\.\d+)?)\b', obj_type)
+                if grade_match:
+                    concrete_grade = grade_match.group(1)
+                    if concrete_grade.startswith('B') and not concrete_grade.startswith('В'):
+                        concrete_grade = 'В' + concrete_grade[1:]
+    
+    # Формируем итоговое название материала с характеристиками
+    final_material = clean_material
+    if any(x in clean_material.lower() for x in ['бетон', 'раствор']):
+        parts = [clean_material] if clean_material else ['Бетон']
+        if concrete_grade and concrete_grade not in clean_material:
+            parts.append(concrete_grade)
+        if freeze_durability and freeze_durability not in clean_material:
+            parts.append(freeze_durability)
+        if water_resist and water_resist not in clean_material:
+            parts.append(water_resist)
+        final_material = ' '.join(parts)
+    
+    return final_material, concrete_grade, freeze_durability, water_resist
 
 
 def parse_excel_report(excel_path: str) -> Dict[str, Any]:
@@ -325,8 +417,8 @@ def parse_excel_report(excel_path: str) -> Dict[str, Any]:
                 # Пытаемся найти материал из ExpCheck_*:MGE_Material
                 base_material_col = f'ExpCheck_{ifc_class[3:]}:MGE_Material'
                 
-                # Используем новую функцию для получения материала с маркой и характеристиками
-                material_result = get_material_with_grade(row, ifc_class, base_material_col)
+                # Используем новую функцию для получения материала с характеристиками
+                material_result = get_material_with_properties(row, ifc_class, base_material_col)
                 base_material = material_result[0]
                 concrete_grade = material_result[1]
                 freeze_durability = material_result[2]
@@ -404,7 +496,7 @@ def parse_excel_report(excel_path: str) -> Dict[str, Any]:
 def create_summary_excel(items: List[Dict[str, Any]], output_path: str) -> str:
     """
     Создаёт Excel отчёт со сводной таблицей в формате:
-    Тип (RU) | Тип элемента | Материал | Класс бетона | Морозостойкость | Водонепроницаемость | Количество, шт | Объем, м³ | Площадь, м²
+    Тип (RU) | Тип элемента | Материал (с характеристиками: Бетон В30 F150 W6) | Количество, шт | Объем, м³ | Площадь, м²
     """
     
     print(f"\n📈 Создание Excel отчета: {output_path}")
@@ -413,9 +505,9 @@ def create_summary_excel(items: List[Dict[str, Any]], output_path: str) -> str:
     ws = wb.active
     ws.title = "Сводка по элементам"
     
+    # Заголовки: материал уже содержит все характеристики (Бетон В30 F150 W6)
     headers = [
-        "Тип (RU)", "Тип элемента", "Материал", "Класс бетона", "Морозостойкость", 
-        "Водонепроницаемость", "Количество, шт", "Объем, м³", "Площадь, м²"
+        "Тип (RU)", "Тип элемента", "Материал", "Количество, шт", "Объем, м³", "Площадь, м²"
     ]
     
     header_font = Font(bold=True, color="FFFFFF")
@@ -437,13 +529,11 @@ def create_summary_excel(items: List[Dict[str, Any]], output_path: str) -> str:
     for idx, item in enumerate(items, 1):
         ws.cell(row=row_num, column=1, value=item['type_ru']).border = thin_border
         ws.cell(row=row_num, column=2, value=item['ifc_class']).border = thin_border
+        # Материал уже содержит характеристики: "Бетон В30 F150 W6"
         ws.cell(row=row_num, column=3, value=item['material']).border = thin_border
-        ws.cell(row=row_num, column=4, value=item['concrete_grade']).border = thin_border
-        ws.cell(row=row_num, column=5, value=item['freeze_durability']).border = thin_border
-        ws.cell(row=row_num, column=6, value=item['water_resist']).border = thin_border
-        ws.cell(row=row_num, column=7, value=item['count']).border = thin_border
-        ws.cell(row=row_num, column=8, value=item['volume'] if item['volume'] != '-' else '-').border = thin_border
-        ws.cell(row=row_num, column=9, value=item['area'] if item['area'] != '-' else '-').border = thin_border
+        ws.cell(row=row_num, column=4, value=item['count']).border = thin_border
+        ws.cell(row=row_num, column=5, value=item['volume'] if item['volume'] != '-' else '-').border = thin_border
+        ws.cell(row=row_num, column=6, value=item['area'] if item['area'] != '-' else '-').border = thin_border
         row_num += 1
     
     # Автоширина колонок
