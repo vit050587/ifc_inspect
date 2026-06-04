@@ -1,1 +1,19 @@
-Nothing should be ignored based on the provided file changes, as only a Python script (`scripts/xlsx_parser.py`) was modified without any build artifacts, dependencies, or temporary files being added.
+# Виртуальное окружение
+.venv/
+venv/
+env/
+ENV/
+
+# Кэш Python (скомпилированные байт-коды)
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# IFC файлы
+*.ifc
+*.IFC
+
+# PDF файлы
+*.pdf
+*.PDF
