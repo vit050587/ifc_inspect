@@ -2,9 +2,11 @@
 """
 Скрипт парсинга Excel файлов отчетов IFC (ifc_report.xlsx).
 Создает сводную таблицу по типам элементов, материалам с количеством, объемом и площадью.
+Для несущих элементов из монолитного железобетона (стены, перекрытия, колонны, фундаменты)
+добавляет характеристики материала: класс бетона, морозостойкость, водонепроницаемость.
 
 Формат выходной таблицы:
-Тип (RU) | Тип элемента | Материал | Количество, шт | Объем, м³ | Площадь, м²
+Тип (RU) | Тип элемента | Материал | Класс бетона | Морозостойкость | Водонепроницаемость | Количество, шт | Объем, м³ | Площадь, м²
 """
 
 import os
@@ -17,6 +19,13 @@ import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
+
+# Несущие элементы из монолитного железобетона
+LOAD_BEARING_CONCRETE_ELEMENTS = {
+    'IfcWall', 'IfcColumn', 'IfcSlab', 'IfcFooting', 'IfcPile', 
+    'IfcBeam', 'IfcMember', 'IfcPlate', 'IfcStair', 'IfcStairFlight',
+    'IfcRamp'
+}
 
 # Mapping IFC классов к русским названиям типов элементов
 IFC_TYPE_RU_MAPPING = {
@@ -62,15 +71,19 @@ def find_ifc_report_file(session_folder: str) -> Optional[str]:
     return str(report_path)
 
 
-def get_material_with_grade(row: pd.Series, ifc_class: str, base_material_col: str) -> str:
+def get_material_with_grade(row: pd.Series, ifc_class: str, base_material_col: str) -> Tuple[str, Optional[str], Optional[str], Optional[str]]:
     """
-    Получает полное имя материала с учетом марки (grade).
+    Получает полное имя материала с учетом марки (grade) и характеристик бетона.
     
     Логика:
     1. Берем базовый материал из ExpCheck_{Class}:MGE_Material
     2. Если это 'Бетон' или подобный материал - добавляем марку из ExpCheck_MaterialConcrete:MGE_ConcreteGrade
     3. Если марки нет в стандартной колонке, пытаемся извлечь из Element Specific:Name или ObjectType
     4. Возвращаем комбинированное имя типа 'Бетон В35' или просто 'Бетон' если марки нет
+    
+    Returns:
+        Tuple[str, Optional[str], Optional[str], Optional[str]]: 
+            (материал_с_маркой, класс_бетона, морозостойкость, водонепроницаемость)
     """
     import re
     
@@ -90,7 +103,12 @@ def get_material_with_grade(row: pd.Series, ifc_class: str, base_material_col: s
                     base_material = str(mat_val).strip()
                     break
     
-    # Если базовый материал - бетон или раствор, добавляем марку
+    # Инициализируем характеристики бетона
+    concrete_grade = None
+    freeze_durability = None
+    water_resist = None
+    
+    # Если базовый материал - бетон или раствор, добавляем марку и характеристики
     concrete_like = ['бетон', 'раствор', 'смесь']
     if any(x in base_material.lower() for x in concrete_like):
         grade = None
@@ -101,6 +119,21 @@ def get_material_with_grade(row: pd.Series, ifc_class: str, base_material_col: s
             grade_val = row.get(grade_col)
             if grade_val and str(grade_val) != '0' and str(grade_val) != 'nan' and str(grade_val).strip():
                 grade = str(grade_val).strip()
+                concrete_grade = grade
+        
+        # Ищем морозостойкость F***
+        freeze_col = 'ExpCheck_MaterialConcrete:MGE_FreezeDurability'
+        if freeze_col in row.index:
+            freeze_val = row.get(freeze_col)
+            if freeze_val and str(freeze_val) != '0' and str(freeze_val) != 'nan' and str(freeze_val).strip():
+                freeze_durability = str(freeze_val).strip()
+        
+        # Ищем водонепроницаемость W**
+        water_col = 'ExpCheck_MaterialConcrete:MGE_WaterResist'
+        if water_col in row.index:
+            water_val = row.get(water_col)
+            if water_val and str(water_val) != '0' and str(water_val) != 'nan' and str(water_val).strip():
+                water_resist = str(water_val).strip()
         
         # Если марки нет в стандартной колонке, пытаемся извлечь из Element Specific:Name
         if not grade or grade == '0':
@@ -110,9 +143,10 @@ def get_material_with_grade(row: pd.Series, ifc_class: str, base_material_col: s
                 if elem_name and str(elem_name) != 'nan' and str(elem_name).strip():
                     elem_name = str(elem_name)
                     # Ищем паттерн типа "В20", "В25", "В30", "В35", "М100" и т.д.
-                    grade_match = re.search(r'\b(В\d+|М\d+)\b', elem_name)
+                    grade_match = re.search(r'\b([BВ]\d+|[MМ]\d+)\b', elem_name)
                     if grade_match:
                         grade = grade_match.group(1)
+                        concrete_grade = grade
         
         # Если все еще нет марки, пробуем ObjectType
         if not grade or grade == '0':
@@ -121,15 +155,16 @@ def get_material_with_grade(row: pd.Series, ifc_class: str, base_material_col: s
                 obj_type = row.get(type_col)
                 if obj_type and str(obj_type) != 'nan' and str(obj_type).strip():
                     obj_type = str(obj_type)
-                    grade_match = re.search(r'\b(В\d+|М\d+)\b', obj_type)
+                    grade_match = re.search(r'\b([BВ]\d+|[MМ]\d+)\b', obj_type)
                     if grade_match:
                         grade = grade_match.group(1)
+                        concrete_grade = grade
         
         # Если нашли марку, комбинируем с материалом
         if grade and grade != '0':
-            return f"{base_material} {grade}"
+            return f"{base_material} {grade}", concrete_grade, freeze_durability, water_resist
     
-    return base_material
+    return base_material, concrete_grade, freeze_durability, water_resist
 
 
 def parse_excel_report(excel_path: str) -> Dict[str, Any]:
@@ -194,7 +229,7 @@ def parse_excel_report(excel_path: str) -> Dict[str, Any]:
         
         print(f"   📏 Найдено {len(volume_cols)} колонок объема, {len(area_cols)} колонок площади")
         
-        # Структура для агрегации: key = (type_ru, ifc_class, material)
+        # Структура для агрегации: key = (type_ru, ifc_class, material, concrete_grade, freeze_durability, water_resist)
         aggregated_data = defaultdict(lambda: {
             'count': 0,
             'volume': 0.0,
@@ -219,6 +254,30 @@ def parse_excel_report(excel_path: str) -> Dict[str, Any]:
             # Флаг: была ли найдена хотя бы одна запись для этой строки
             has_material_data = False
             
+            # Получаем характеристики бетона из строки (для использования в обоих случаях)
+            concrete_grade = None
+            freeze_durability = None
+            water_resist = None
+            
+            # Ищем характеристики бетона в стандартных колонках
+            grade_col = 'ExpCheck_MaterialConcrete:MGE_ConcreteGrade'
+            if grade_col in row.index:
+                grade_val = row.get(grade_col)
+                if grade_val and str(grade_val) != '0' and str(grade_val) != 'nan' and str(grade_val).strip():
+                    concrete_grade = str(grade_val).strip()
+            
+            freeze_col = 'ExpCheck_MaterialConcrete:MGE_FreezeDurability'
+            if freeze_col in row.index:
+                freeze_val = row.get(freeze_col)
+                if freeze_val and str(freeze_val) != '0' and str(freeze_val) != 'nan' and str(freeze_val).strip():
+                    freeze_durability = str(freeze_val).strip()
+            
+            water_col = 'ExpCheck_MaterialConcrete:MGE_WaterResist'
+            if water_col in row.index:
+                water_val = row.get(water_col)
+                if water_val and str(water_val) != '0' and str(water_val) != 'nan' and str(water_val).strip():
+                    water_resist = str(water_val).strip()
+            
             # Обрабатываем колонки с материалами
             for mat_col_info in material_columns:
                 col_name = mat_col_info['column']
@@ -234,8 +293,8 @@ def parse_excel_report(excel_path: str) -> Dict[str, Any]:
                         if numeric_value <= 0:
                             continue
                         
-                        # Ключ агрегации
-                        key = (type_ru, ifc_class, material_name)
+                        # Ключ агрегации с характеристиками бетона
+                        key = (type_ru, ifc_class, material_name, concrete_grade, freeze_durability, water_resist)
                         
                         # Определяем тип величины по номеру группы материалов
                         # 02 - бетон и подобные (объем), 03 - растворы (объем), 
@@ -266,8 +325,12 @@ def parse_excel_report(excel_path: str) -> Dict[str, Any]:
                 # Пытаемся найти материал из ExpCheck_*:MGE_Material
                 base_material_col = f'ExpCheck_{ifc_class[3:]}:MGE_Material'
                 
-                # Используем новую функцию для получения материала с маркой
-                base_material = get_material_with_grade(row, ifc_class, base_material_col)
+                # Используем новую функцию для получения материала с маркой и характеристиками
+                material_result = get_material_with_grade(row, ifc_class, base_material_col)
+                base_material = material_result[0]
+                concrete_grade = material_result[1]
+                freeze_durability = material_result[2]
+                water_resist = material_result[3]
                 
                 # Получаем объем и площадь из стандартных колонок
                 volume = 0.0
@@ -291,7 +354,7 @@ def parse_excel_report(excel_path: str) -> Dict[str, Any]:
                 
                 # Если есть объем или площадь, добавляем запись
                 if volume > 0 or area > 0:
-                    key = (type_ru, ifc_class, base_material)
+                    key = (type_ru, ifc_class, base_material, concrete_grade, freeze_durability, water_resist)
                     aggregated_data[key]['volume'] += volume
                     aggregated_data[key]['area'] += area
                     aggregated_data[key]['count'] += 1
@@ -299,7 +362,7 @@ def parse_excel_report(excel_path: str) -> Dict[str, Any]:
                 
                 # Если нет объема/площади, но элемент существует - считаем как штуки
                 if not has_material_data:
-                    key = (type_ru, ifc_class, base_material)
+                    key = (type_ru, ifc_class, base_material, concrete_grade, freeze_durability, water_resist)
                     aggregated_data[key]['count'] += 1
             
             processed_rows += 1
@@ -309,11 +372,14 @@ def parse_excel_report(excel_path: str) -> Dict[str, Any]:
         
         # Преобразуем в список для удобства
         items = []
-        for (type_ru, ifc_class, material), data in aggregated_data.items():
+        for (type_ru, ifc_class, material, concrete_grade, freeze_durability, water_resist), data in aggregated_data.items():
             items.append({
                 'type_ru': type_ru,
                 'ifc_class': ifc_class,
                 'material': material,
+                'concrete_grade': concrete_grade if concrete_grade else '-',
+                'freeze_durability': freeze_durability if freeze_durability else '-',
+                'water_resist': water_resist if water_resist else '-',
                 'count': int(data['count']),
                 'volume': round(data['volume'], 3) if data['volume'] > 0 else '-',
                 'area': round(data['area'], 3) if data['area'] > 0 else '-',
@@ -338,7 +404,7 @@ def parse_excel_report(excel_path: str) -> Dict[str, Any]:
 def create_summary_excel(items: List[Dict[str, Any]], output_path: str) -> str:
     """
     Создаёт Excel отчёт со сводной таблицей в формате:
-    Тип (RU) | Тип элемента | Материал | Количество, шт | Объем, м³ | Площадь, м²
+    Тип (RU) | Тип элемента | Материал | Класс бетона | Морозостойкость | Водонепроницаемость | Количество, шт | Объем, м³ | Площадь, м²
     """
     
     print(f"\n📈 Создание Excel отчета: {output_path}")
@@ -348,7 +414,8 @@ def create_summary_excel(items: List[Dict[str, Any]], output_path: str) -> str:
     ws.title = "Сводка по элементам"
     
     headers = [
-        "Тип (RU)", "Тип элемента", "Материал", "Количество, шт", "Объем, м³", "Площадь, м²"
+        "Тип (RU)", "Тип элемента", "Материал", "Класс бетона", "Морозостойкость", 
+        "Водонепроницаемость", "Количество, шт", "Объем, м³", "Площадь, м²"
     ]
     
     header_font = Font(bold=True, color="FFFFFF")
@@ -371,9 +438,12 @@ def create_summary_excel(items: List[Dict[str, Any]], output_path: str) -> str:
         ws.cell(row=row_num, column=1, value=item['type_ru']).border = thin_border
         ws.cell(row=row_num, column=2, value=item['ifc_class']).border = thin_border
         ws.cell(row=row_num, column=3, value=item['material']).border = thin_border
-        ws.cell(row=row_num, column=4, value=item['count']).border = thin_border
-        ws.cell(row=row_num, column=5, value=item['volume'] if item['volume'] != '-' else '-').border = thin_border
-        ws.cell(row=row_num, column=6, value=item['area'] if item['area'] != '-' else '-').border = thin_border
+        ws.cell(row=row_num, column=4, value=item['concrete_grade']).border = thin_border
+        ws.cell(row=row_num, column=5, value=item['freeze_durability']).border = thin_border
+        ws.cell(row=row_num, column=6, value=item['water_resist']).border = thin_border
+        ws.cell(row=row_num, column=7, value=item['count']).border = thin_border
+        ws.cell(row=row_num, column=8, value=item['volume'] if item['volume'] != '-' else '-').border = thin_border
+        ws.cell(row=row_num, column=9, value=item['area'] if item['area'] != '-' else '-').border = thin_border
         row_num += 1
     
     # Автоширина колонок
