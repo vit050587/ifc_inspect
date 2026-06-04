@@ -1,28 +1,47 @@
-# Виртуальное окружение
-.venv/
-venv/
-env/
-ENV/
-
-# Кэш Python (скомпилированные байт-коды)
+```
+# Python
 __pycache__/
 *.py[cod]
-*.pyo
-*.pyd
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# IFC файлы
-*.ifc
-*.IFC
+# Environment
+.env
+.env.local
+.env.*
+.venv/
+venv/
+ENV/
 
-# PDF файлы
-*.pdf
-*.PDF
+# Uploads (assuming user-generated content)
+uploads/
 
-# Игнорируем динамические подпапки внутри каждой UUID-папки в uploads/
-uploads/*/drawings/
-uploads/*/explanatory_note/
-uploads/*/ifc_models/
-uploads/*/pdf_documents/
-uploads/*/specification/
-uploads/*/viewer/
-uploads/*/volume_statement/
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+```
