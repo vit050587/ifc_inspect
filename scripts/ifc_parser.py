@@ -317,7 +317,7 @@ def parse_ifc_to_excel(ifc_path, output_excel_path):
     ws_summary.cell(row=row, column=2, value=summary['stories_count']).border = thin_border
     row += 1
 
-    ws_summary.cell(row=row, column=1, value="Высота здания (в единицах IFC)").border = thin_border
+    ws_summary.cell(row=row, column=1, value="Высота здания").border = thin_border
     ws_summary.cell(row=row, column=2, value=summary['building_height'] or 'N/A').border = thin_border
     row += 1
 

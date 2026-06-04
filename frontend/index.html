@@ -823,10 +823,6 @@
                             // Get project info for stories, height, longName
                             const projectInfo = ifcResults.project_info;
                             if (projectInfo) {
-                                // Find stories count from the summary sheet
-                                const storiesCount = ifcResults.stories_count || 0;
-                                document.getElementById('storiesCount').textContent = storiesCount;
-                                
                                 // Get building address
                                 if (projectInfo.LongName) {
                                     document.getElementById('longName').textContent = projectInfo.LongName;
