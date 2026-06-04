@@ -1,18 +1,1 @@
-```
-# Uploads directory - likely contains user-uploaded files
-uploads/
-
-# Python cache
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-
-# Logs
-*.log
-
-# Environment files
-.env
-.env.local
-*.env.*
-```
+Nothing needs to be added to .gitignore since only a source file (frontend/index.html) was modified and there are no build artifacts, dependencies, or temporary files in the changes.
