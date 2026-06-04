@@ -12,7 +12,7 @@ import re
 # Пути к файлам
 IFC_FILE = "data/ifc модель КР.ifc"
 JSON_OUTPUT = "data/ifc_extracted_detailed.json"
-EXCEL_OUTPUT = "Data/summary.xlsx"
+EXCEL_OUTPUT = "data/summary.xlsx"
 
 def get_unit_scale(ifc_file):
     """Получить масштаб единиц из IFC файла"""
