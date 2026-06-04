@@ -15,6 +15,7 @@ from scripts.draw_detector import extract_drawings_from_explanatory_note
 from scripts.ifc_viewer import prepare_ifc_for_viewer
 from scripts.ifc_parser import parse_ifc_file
 from scripts.xlsx_parser import parse_and_aggregate_specification
+from scripts.volume_statement_parser import parse_volume_statement_pdfs
 
 app = Flask(__name__, static_folder='../frontend', static_url_path='')
 CORS(app)
@@ -209,6 +210,21 @@ def process_files():
         print(f"❌ Ошибка парсинга Excel спецификации: {e}")
         session_info['xlsx_parser_error'] = str(e)
     
+    # Step 6: Parse volume statement PDFs and extract material tables
+    print("\n" + "="*60)
+    print("📊 ШАГ 6: ПАРСИНГ ВЕДОМОСТЕЙ ОБЪЕМОВ (PDF)")
+    print("="*60)
+
+    try:
+        volume_results = parse_volume_statement_pdfs(session_folder)
+        results['volume_statement_results'] = volume_results
+        if volume_results.get('success'):
+            session_info['volume_statement_excel_file'] = 'volume_statement_summary.xlsx'
+            print(f"✅ Ведомость объемов из PDF создана: {session_info['volume_statement_excel_file']}")
+    except Exception as e:
+        print(f"❌ Ошибка парсинга ведомостей объемов: {e}")
+        session_info['volume_statement_error'] = str(e)
+
     # Save results
     results_path = os.path.join(session_folder, 'results.json')
     with open(results_path, 'w', encoding='utf-8') as f:
