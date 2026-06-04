@@ -7,7 +7,7 @@
     {
       "type_ru": "Балки",
       "ifc_class": "IfcBeam",
-      "material": "Железобетон B25",
+      "material": "Железобетон B25 F100 W6",
       "concrete_grade": "B25",
       "freeze_durability": "F100",
       "water_resist": "W6",
@@ -18,7 +18,7 @@
     {
       "type_ru": "Балки",
       "ifc_class": "IfcBeam",
-      "material": "Железобетон B30",
+      "material": "Железобетон B30 F150 W8",
       "concrete_grade": "B30",
       "freeze_durability": "F150",
       "water_resist": "W8",
@@ -40,7 +40,7 @@
     {
       "type_ru": "Колонны",
       "ifc_class": "IfcColumn",
-      "material": "Железобетон B30",
+      "material": "Железобетон B30 F150 W8",
       "concrete_grade": "B30",
       "freeze_durability": "F150",
       "water_resist": "W8",
@@ -52,9 +52,9 @@
       "type_ru": "Колонны",
       "ifc_class": "IfcColumn",
       "material": "М",
-      "concrete_grade": "-",
-      "freeze_durability": "-",
-      "water_resist": "-",
+      "concrete_grade": "B30",
+      "freeze_durability": "F150",
+      "water_resist": "W8",
       "count": 56,
       "volume": 1014938.63,
       "area": 1735925.197
@@ -117,7 +117,7 @@
     {
       "type_ru": "Перекрытия",
       "ifc_class": "IfcSlab",
-      "material": "Железобетон B25",
+      "material": "Железобетон B25 F100 W6",
       "concrete_grade": "B25",
       "freeze_durability": "F100",
       "water_resist": "W6",
@@ -128,7 +128,7 @@
     {
       "type_ru": "Перекрытия",
       "ifc_class": "IfcSlab",
-      "material": "Железобетон B30",
+      "material": "Железобетон B30 F150 W8",
       "concrete_grade": "B30",
       "freeze_durability": "F150",
       "water_resist": "W8",
@@ -140,9 +140,9 @@
       "type_ru": "Перекрытия",
       "ifc_class": "IfcSlab",
       "material": "ПОД",
-      "concrete_grade": "-",
-      "freeze_durability": "-",
-      "water_resist": "-",
+      "concrete_grade": "B15",
+      "freeze_durability": "F150",
+      "water_resist": "W8",
       "count": 15,
       "volume": 8807.267,
       "area": 8279.956
@@ -205,7 +205,7 @@
     {
       "type_ru": "Стены",
       "ifc_class": "IfcWall",
-      "material": "Железобетон B25",
+      "material": "Железобетон B25 F100 W6",
       "concrete_grade": "B25",
       "freeze_durability": "F100",
       "water_resist": "W6",
@@ -216,7 +216,7 @@
     {
       "type_ru": "Стены",
       "ifc_class": "IfcWall",
-      "material": "Железобетон B30",
+      "material": "Железобетон B30 F150 W8",
       "concrete_grade": "B30",
       "freeze_durability": "F150",
       "water_resist": "W8",
