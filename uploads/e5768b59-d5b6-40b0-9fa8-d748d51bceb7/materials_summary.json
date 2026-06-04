@@ -1,0 +1,160 @@
+{
+  "success": true,
+  "source_file": "ifc_report.xlsx",
+  "total_items": 19,
+  "output_excel": "materials_summary.xlsx",
+  "items": [
+    {
+      "type_ru": "Двери",
+      "ifc_class": "IfcDoor",
+      "material": "Дерево",
+      "count": 529,
+      "volume": "-",
+      "area": "-"
+    },
+    {
+      "type_ru": "Двери",
+      "ifc_class": "IfcDoor",
+      "material": "Не указан",
+      "count": 21,
+      "volume": "-",
+      "area": "-"
+    },
+    {
+      "type_ru": "Двери",
+      "ifc_class": "IfcDoor",
+      "material": "Сталь",
+      "count": 357,
+      "volume": "-",
+      "area": "-"
+    },
+    {
+      "type_ru": "Колонны",
+      "ifc_class": "IfcColumn",
+      "material": "Бетон",
+      "count": 323,
+      "volume": 7.998,
+      "area": "-"
+    },
+    {
+      "type_ru": "Лестницы",
+      "ifc_class": "IfcStair",
+      "material": "ЖБ",
+      "count": 18,
+      "volume": "-",
+      "area": "-"
+    },
+    {
+      "type_ru": "Лестницы",
+      "ifc_class": "IfcStair",
+      "material": "Железобетон",
+      "count": 7,
+      "volume": "-",
+      "area": "-"
+    },
+    {
+      "type_ru": "Лестницы",
+      "ifc_class": "IfcStair",
+      "material": "Сталь",
+      "count": 1,
+      "volume": "-",
+      "area": "-"
+    },
+    {
+      "type_ru": "Лестничные_марши",
+      "ifc_class": "IfcStairFlight",
+      "material": "Железобетон",
+      "count": 53,
+      "volume": 40.949,
+      "area": "-"
+    },
+    {
+      "type_ru": "Навесные_стены",
+      "ifc_class": "IfcCurtainWall",
+      "material": "нет данных",
+      "count": 290,
+      "volume": "-",
+      "area": "-"
+    },
+    {
+      "type_ru": "Ограждения",
+      "ifc_class": "IfcRailing",
+      "material": "Сталь",
+      "count": 28,
+      "volume": "-",
+      "area": "-"
+    },
+    {
+      "type_ru": "Окна",
+      "ifc_class": "IfcWindow",
+      "material": "Не указан",
+      "count": 419,
+      "volume": "-",
+      "area": "-"
+    },
+    {
+      "type_ru": "Перекрытия",
+      "ifc_class": "IfcSlab",
+      "material": "Не указан",
+      "count": 87,
+      "volume": 6392.315,
+      "area": 20122.759
+    },
+    {
+      "type_ru": "Плиты",
+      "ifc_class": "IfcPlate",
+      "material": "Не указан",
+      "count": 1934,
+      "volume": 35.413,
+      "area": "-"
+    },
+    {
+      "type_ru": "Покрытия",
+      "ifc_class": "IfcCovering",
+      "material": "Не указан",
+      "count": 1006,
+      "volume": "-",
+      "area": 11949.516
+    },
+    {
+      "type_ru": "Покрытия",
+      "ifc_class": "IfcCovering",
+      "material": "нет данных",
+      "count": 6158,
+      "volume": 784.898,
+      "area": 86140.035
+    },
+    {
+      "type_ru": "Проемы",
+      "ifc_class": "IfcOpeningElement",
+      "material": "Не указан",
+      "count": 4409,
+      "volume": "-",
+      "area": "-"
+    },
+    {
+      "type_ru": "Прочие_элементы",
+      "ifc_class": "IfcBuildingElementProxy",
+      "material": "Не указан",
+      "count": 1275,
+      "volume": "-",
+      "area": "-"
+    },
+    {
+      "type_ru": "Стены",
+      "ifc_class": "IfcWall",
+      "material": "Не указан",
+      "count": 3602,
+      "volume": 9249.888,
+      "area": 47193.427
+    },
+    {
+      "type_ru": "Элементы_каркаса",
+      "ifc_class": "IfcMember",
+      "material": "Не указан",
+      "count": 14530,
+      "volume": 17.816,
+      "area": "-"
+    }
+  ]
+}

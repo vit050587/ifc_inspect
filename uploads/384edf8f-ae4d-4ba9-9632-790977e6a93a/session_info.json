@@ -1,0 +1,74 @@
+{
+  "session_id": "384edf8f-ae4d-4ba9-9632-790977e6a93a",
+  "status": "completed",
+  "pdf_files": [
+    "ВОР КР.pdf",
+    "Текстовая и графическая часть КР.pdf"
+  ],
+  "ifc_files": [
+    "ifc модель КР.ifc"
+  ],
+  "excel_files": [],
+  "other_files": [],
+  "file_organization": {
+    "ifc_count": 1,
+    "excel_count": 0,
+    "pdf_count": 2
+  },
+  "pdf_classification": {
+    "categories": {
+      "volume_statement": 1,
+      "explanatory_note": 1
+    },
+    "files": {
+      "volume_statement": [
+        {
+          "filename": "ВОР КР.pdf",
+          "source_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/384edf8f-ae4d-4ba9-9632-790977e6a93a/pdf_documents/ВОР КР.pdf",
+          "dest_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/384edf8f-ae4d-4ba9-9632-790977e6a93a/volume_statement/ВОР КР.pdf",
+          "category": "volume_statement",
+          "pages_analyzed": 3,
+          "file_size": 641279
+        }
+      ],
+      "explanatory_note": [
+        {
+          "filename": "Текстовая и графическая часть КР.pdf",
+          "source_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/384edf8f-ae4d-4ba9-9632-790977e6a93a/pdf_documents/Текстовая и графическая часть КР.pdf",
+          "dest_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/384edf8f-ae4d-4ba9-9632-790977e6a93a/explanatory_note/Текстовая и графическая часть КР.pdf",
+          "category": "explanatory_note",
+          "pages_analyzed": 3,
+          "file_size": 39964620
+        }
+      ]
+    }
+  },
+  "drawings_error": "name 'json' is not defined",
+  "ifc_viewer_info": [
+    {
+      "valid": true,
+      "project_name": "С-015/20",
+      "element_count": 3934,
+      "buildings_count": 1,
+      "stories_count": 17,
+      "schema": "IFC4",
+      "file_size": 10207409,
+      "filename": "ifc модель КР.ifc",
+      "filepath": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/384edf8f-ae4d-4ba9-9632-790977e6a93a/ifc_models/ifc модель КР.ifc",
+      "geometry_json": "ifc модель КР_geometry.json",
+      "has_geometry_json": true,
+      "viewer_url": "/api/viewer/384edf8f-ae4d-4ba9-9632-790977e6a93a/ifc модель КР.ifc",
+      "viewer_folder": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/384edf8f-ae4d-4ba9-9632-790977e6a93a/viewer"
+    }
+  ],
+  "ifc_excel_file": "ifc_report.xlsx",
+  "materials_excel_file": "materials_summary.xlsx",
+  "results_summary": {
+    "text_pages_count": 112,
+    "drawing_pages_count": 94,
+    "drawings_folder_count": 0,
+    "ifc_processed": true,
+    "pdf_classified": true,
+    "xlsx_parsed": true
+  }
+}

@@ -1,0 +1,208 @@
+{
+  "text_pages": [],
+  "drawing_pages": [],
+  "ifc_results": {
+    "success": true,
+    "excel_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/e5768b59-d5b6-40b0-9fa8-d748d51bceb7/ifc_report.xlsx",
+    "excel_filename": "ifc_report.xlsx",
+    "project_info": {
+      "Name": "35-РЕН-ПИР",
+      "Description": "N/A",
+      "LongName": "Жилой дом с инженерными сетями и благоустройством территории по адресу: г. Москва, район Перово, ул. 1-я Владимирская, влд. 47, з/у 1 (Восточный административный округ)",
+      "Phase": "П",
+      "Schema": "IFC4",
+      "CreationDate": "2021-11-10 10:53:40"
+    },
+    "elements_count": {
+      "IfcWindow": 419,
+      "IfcMember": 14530,
+      "IfcOpeningElement": 4409,
+      "IfcPlate": 1934,
+      "IfcRailing": 28,
+      "IfcStairFlight": 53,
+      "IfcStair": 26,
+      "IfcWall": 3602,
+      "IfcDoor": 907,
+      "IfcBuildingElementProxy": 1275,
+      "IfcCurtainWall": 290,
+      "IfcSlab": 87,
+      "IfcCovering": 7164,
+      "IfcColumn": 323
+    },
+    "total_elements": 35047,
+    "materials_count": 0,
+    "stories_count": 23
+  },
+  "pdf_classification": {
+    "categories": {
+      "volume_statement": 0,
+      "explanatory_note": 0
+    },
+    "files": {
+      "volume_statement": [],
+      "explanatory_note": []
+    }
+  },
+  "materials_summary": null,
+  "xlsx_parser_results": {
+    "success": true,
+    "excel_file_found": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/e5768b59-d5b6-40b0-9fa8-d748d51bceb7/ifc_report.xlsx",
+    "parsed_items": 19,
+    "aggregated_materials": 19,
+    "output_file": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/e5768b59-d5b6-40b0-9fa8-d748d51bceb7/materials_summary.xlsx",
+    "materials_summary": [
+      {
+        "type_ru": "Двери",
+        "ifc_class": "IfcDoor",
+        "material": "Дерево",
+        "count": 529,
+        "volume": "-",
+        "area": "-"
+      },
+      {
+        "type_ru": "Двери",
+        "ifc_class": "IfcDoor",
+        "material": "Не указан",
+        "count": 21,
+        "volume": "-",
+        "area": "-"
+      },
+      {
+        "type_ru": "Двери",
+        "ifc_class": "IfcDoor",
+        "material": "Сталь",
+        "count": 357,
+        "volume": "-",
+        "area": "-"
+      },
+      {
+        "type_ru": "Колонны",
+        "ifc_class": "IfcColumn",
+        "material": "Бетон",
+        "count": 323,
+        "volume": 7.998,
+        "area": "-"
+      },
+      {
+        "type_ru": "Лестницы",
+        "ifc_class": "IfcStair",
+        "material": "ЖБ",
+        "count": 18,
+        "volume": "-",
+        "area": "-"
+      },
+      {
+        "type_ru": "Лестницы",
+        "ifc_class": "IfcStair",
+        "material": "Железобетон",
+        "count": 7,
+        "volume": "-",
+        "area": "-"
+      },
+      {
+        "type_ru": "Лестницы",
+        "ifc_class": "IfcStair",
+        "material": "Сталь",
+        "count": 1,
+        "volume": "-",
+        "area": "-"
+      },
+      {
+        "type_ru": "Лестничные_марши",
+        "ifc_class": "IfcStairFlight",
+        "material": "Железобетон",
+        "count": 53,
+        "volume": 40.949,
+        "area": "-"
+      },
+      {
+        "type_ru": "Навесные_стены",
+        "ifc_class": "IfcCurtainWall",
+        "material": "нет данных",
+        "count": 290,
+        "volume": "-",
+        "area": "-"
+      },
+      {
+        "type_ru": "Ограждения",
+        "ifc_class": "IfcRailing",
+        "material": "Сталь",
+        "count": 28,
+        "volume": "-",
+        "area": "-"
+      },
+      {
+        "type_ru": "Окна",
+        "ifc_class": "IfcWindow",
+        "material": "Не указан",
+        "count": 419,
+        "volume": "-",
+        "area": "-"
+      },
+      {
+        "type_ru": "Перекрытия",
+        "ifc_class": "IfcSlab",
+        "material": "Не указан",
+        "count": 87,
+        "volume": 6392.315,
+        "area": 20122.759
+      },
+      {
+        "type_ru": "Плиты",
+        "ifc_class": "IfcPlate",
+        "material": "Не указан",
+        "count": 1934,
+        "volume": 35.413,
+        "area": "-"
+      },
+      {
+        "type_ru": "Покрытия",
+        "ifc_class": "IfcCovering",
+        "material": "Не указан",
+        "count": 1006,
+        "volume": "-",
+        "area": 11949.516
+      },
+      {
+        "type_ru": "Покрытия",
+        "ifc_class": "IfcCovering",
+        "material": "нет данных",
+        "count": 6158,
+        "volume": 784.898,
+        "area": 86140.035
+      },
+      {
+        "type_ru": "Проемы",
+        "ifc_class": "IfcOpeningElement",
+        "material": "Не указан",
+        "count": 4409,
+        "volume": "-",
+        "area": "-"
+      },
+      {
+        "type_ru": "Прочие_элементы",
+        "ifc_class": "IfcBuildingElementProxy",
+        "material": "Не указан",
+        "count": 1275,
+        "volume": "-",
+        "area": "-"
+      },
+      {
+        "type_ru": "Стены",
+        "ifc_class": "IfcWall",
+        "material": "Не указан",
+        "count": 3602,
+        "volume": 9249.888,
+        "area": 47193.427
+      },
+      {
+        "type_ru": "Элементы_каркаса",
+        "ifc_class": "IfcMember",
+        "material": "Не указан",
+        "count": 14530,
+        "volume": 17.816,
+        "area": "-"
+      }
+    ]
+  }
+}

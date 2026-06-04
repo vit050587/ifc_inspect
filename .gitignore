@@ -17,3 +17,12 @@ __pycache__/
 # PDF файлы
 *.pdf
 *.PDF
+
+# Игнорируем динамические подпапки внутри каждой UUID-папки в uploads/
+uploads/*/drawings/
+uploads/*/explanatory_note/
+uploads/*/ifc_models/
+uploads/*/pdf_documents/
+uploads/*/specification/
+uploads/*/viewer/
+uploads/*/volume_statement/
