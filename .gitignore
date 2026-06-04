@@ -15,8 +15,8 @@ __pycache__/
 *.IFC
 
 # PDF файлы
-#*.pdf
-#*.PDF
+# *.pdf
+# *.PDF
 
 # Игнорируем динамические подпапки внутри каждой UUID-папки в uploads/
 uploads/*/drawings/
