@@ -1,15 +1,53 @@
-```gitignore
-# Compiled and build artifacts
-*.pyc
-__pycache__/
+```
+# Data files
+data/
+Data/
 
-# Excel files (binary format)
-*.xlsx
-*.xls
-*.xlsm
-*.xlsb
-*.xlt
-*.xltm
-*.xltx
-*.csv
+# Environment
+.env
+.env.local
+*.env.*
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg-info/
+.eggs/
+.coverage
+coverage/
+htmlcov/
+.mypy_cache/
+.pytest_cache/
+.tox/
+.coverage*
+.nox/
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+.ENV/
+
+# Build directories
+dist/
+build/
+*.egg
+*.whl
 ```
