@@ -604,7 +604,10 @@ def classify_element(element, name):
     
     if element_type == "IfcSlab":
         # Приоритет 1: Лестничные площадки (должны быть отдельно)
-        if "ЛЕСТНИЧ" in name_upper or "STAIR" in name_upper or "ПЛОЩАДКА" in name_upper:
+        # Проверяем по имени элемента и по типу
+        if ("ЛЕСТНИЧ" in name_upper or "STAIR" in name_upper or 
+            "ПЛОЩАДК" in name_upper or "ПЛОЩ." in name_upper or
+            "ЛМ" in name_upper):
             return "Лестница_Площадка"
         
         # Приоритет 2: Подготовка фундамента (песок, щебень, тощий бетон, стяжка)
