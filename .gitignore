@@ -1,1 +1,35 @@
-Nothing should be ignored in this case, as the changes only include source files (.json, .py) without any build artifacts, dependencies, or temporary files.
+```
+# Dependencies
+__pycache__/
+
+# Compiled files
+*.pyc
+*.pyo
+*.pyd
+
+# Logs and temp files
+*.log
+*.tmp
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Editors
+.vscode/
+.idea/
+
+# Coverage
+.coverage
+coverage/
+htmlcov/
+
+# Python specific
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+```

@@ -1051,6 +1051,167 @@ def create_summary_excel(items, output_path):
     print(f"✅ Сводная таблица сохранена: {output_path}")
 
 
+def extract_building_info(ifc_file):
+    """
+    Извлечь информацию об объекте строительства из открытого IFC файла.
+    
+    Args:
+        ifc_file: Открытый IFC файл
+        
+    Returns:
+        Словарь с информацией о здании
+    """
+    result = {
+        "project": {},
+        "building": {},
+        "storeys": [],
+        "summary": {}
+    }
+    
+    # === Извлечение данных проекта ===
+    projects = ifc_file.by_type("IfcProject")
+    if projects:
+        project = projects[0]
+        result["project"]["name"] = getattr(project, 'Name', None)
+        result["project"]["long_name"] = getattr(project, 'LongName', None)
+        result["project"]["description"] = getattr(project, 'Description', None)
+    
+    # === Извлечение данных здания ===
+    buildings = ifc_file.by_type("IfcBuilding")
+    if buildings:
+        building = buildings[0]
+        
+        # Базовые атрибуты
+        result["building"]["name"] = getattr(building, 'Name', None)
+        result["building"]["long_name"] = getattr(building, 'LongName', None)
+        result["building"]["elevation_ref_height"] = getattr(building, 'ElevationOfRefHeight', None)
+        result["building"]["elevation_terrain"] = getattr(building, 'ElevationOfTerrain', None)
+        
+        # Извлечение свойств через IsDefinedBy
+        psets_data = {}
+        if hasattr(building, 'IsDefinedBy'):
+            for rel in building.IsDefinedBy:
+                if hasattr(rel, 'RelatingPropertyDefinition'):
+                    pset_def = rel.RelatingPropertyDefinition
+                    pset_name = getattr(pset_def, 'Name', 'Unknown')
+                    
+                    if hasattr(pset_def, 'HasProperties'):
+                        for prop in pset_def.HasProperties:
+                            prop_name = getattr(prop, 'Name', None)
+                            prop_value = getattr(prop, 'NominalValue', None)
+                            
+                            if prop_name and prop_value is not None:
+                                # Извлекаем само значение из NominalValue
+                                if hasattr(prop_value, 'wrappedValue'):
+                                    actual_value = prop_value.wrappedValue
+                                else:
+                                    actual_value = prop_value
+                                
+                                if pset_name not in psets_data:
+                                    psets_data[pset_name] = {}
+                                psets_data[pset_name][prop_name] = actual_value
+        
+        # Сохраняем все найденные свойства
+        result["building"]["properties"] = psets_data
+        
+        # Ключевые параметры для summary
+        if "ExpCheck_Building" in psets_data:
+            exp_props = psets_data["ExpCheck_Building"]
+            result["building"]["address"] = exp_props.get("MGE_BuildingAddress")
+            result["building"]["customer"] = exp_props.get("MGE_Customer")
+            result["building"]["designer"] = exp_props.get("MGE_Designer")
+            result["building"]["project_name"] = exp_props.get("MGE_ProjectName")
+            result["building"]["object_name"] = exp_props.get("MGE_ObjectName")
+            result["building"]["project_code"] = exp_props.get("MGE_ProjectCode")
+            result["building"]["korpus"] = exp_props.get("MGE_Korpus")
+            result["building"]["section"] = exp_props.get("MGE_Section")
+            result["building"]["num_of_section"] = exp_props.get("MGE_NumOfSection")
+            result["building"]["functional_use"] = exp_props.get("MGE_FunctionalUse")
+            
+            # Высота от нулевой отметки (разница между референсной высотой и уровнем земли)
+            ref_height = exp_props.get("MGE_ElevationOfRefHeight")
+            terrain_height = exp_props.get("MGE_ElevationOfTerrain")
+            if ref_height is not None and terrain_height is not None:
+                # Обычно MGE_ElevationOfRefHeight - это абсолютная высота в мм
+                # Конвертируем в метры
+                result["building"]["ref_height_m"] = float(ref_height) / 1000.0 if ref_height else None
+                result["building"]["terrain_height_m"] = float(terrain_height) / 1000.0 if terrain_height else None
+        
+        if "Pset_BuildingCommon" in psets_data:
+            common_props = psets_data["Pset_BuildingCommon"]
+            result["building"]["number_of_storeys"] = common_props.get("NumberOfStoreys")
+            result["building"]["construction_method"] = common_props.get("ConstructionMethod")
+            result["building"]["fire_protection_class"] = common_props.get("FireProtectionClass")
+            result["building"]["is_landmarked"] = common_props.get("IsLandmarked")
+    
+    # === Извлечение информации об этажах ===
+    storeys = ifc_file.by_type("IfcBuildingStorey")
+    above_ground_storeys = []
+    below_ground_storeys = []
+    
+    for storey in storeys:
+        elevation = getattr(storey, 'Elevation', None)
+        storey_info = {
+            "name": getattr(storey, 'Name', None),
+            "elevation": float(elevation) / 1000.0 if elevation is not None else None  # Конвертация в метры
+        }
+        
+        # Определяем, надземный или подземный этаж
+        if elevation is not None:
+            if elevation > 0:
+                above_ground_storeys.append(storey_info)
+            else:
+                below_ground_storeys.append(storey_info)
+        else:
+            above_ground_storeys.append(storey_info)
+        
+        result["storeys"].append(storey_info)
+    
+    # Сортировка этажей по высоте
+    result["storeys"].sort(key=lambda x: x["elevation"] if x["elevation"] is not None else 0)
+    
+    # === Формирование сводной информации (summary) ===
+    total_storeys = len(above_ground_storeys) + len(below_ground_storeys)
+    
+    # Расчет высоты здания
+    max_elevation = None
+    min_elevation = None
+    
+    for storey in result["storeys"]:
+        elev = storey["elevation"]
+        if elev is not None:
+            if max_elevation is None or elev > max_elevation:
+                max_elevation = elev
+            if min_elevation is None or elev < min_elevation:
+                min_elevation = elev
+    
+    # Общая высота здания от нулевой отметки
+    if max_elevation is not None:
+        result["summary"]["total_height_from_zero_m"] = round(max_elevation, 3)
+    
+    # Глубина подземной части
+    if min_elevation is not None and min_elevation < 0:
+        result["summary"]["underground_depth_m"] = round(abs(min_elevation), 3)
+    
+    # Полная высота (от низа подземной части до верха)
+    if max_elevation is not None and min_elevation is not None:
+        result["summary"]["total_height_full_m"] = round(max_elevation - min_elevation, 3)
+    
+    # Этажность
+    result["summary"]["above_ground_storeys"] = len(above_ground_storeys)
+    result["summary"]["below_ground_storeys"] = len(below_ground_storeys)
+    result["summary"]["total_storeys"] = total_storeys
+    
+    # Если есть данные из Pset_BuildingCommon
+    if result["building"].get("number_of_storeys"):
+        result["summary"]["storeys_from_pset"] = result["building"]["number_of_storeys"]
+    
+    # Адрес
+    result["summary"]["address"] = result["building"].get("address")
+    
+    return result
+
+
 def parse_ifc_file(ifc_path, output_folder):
     """
     Основная функция для сервиса ifc_inspect.
@@ -1078,6 +1239,37 @@ def parse_ifc_file(ifc_path, output_folder):
     print("\n📋 Шаг 1: Извлечение данных из IFC...")
     data = extract_ifc_data(ifc_path)
     print(f"   ✅ Извлечено {len(data)} элементов")
+    
+    # Шаг 1.5: Извлечение информации о здании
+    print("\n🏢 Шаг 1.5: Извлечение информации об объекте строительства...")
+    try:
+        ifc_file_for_building = ifcopenshell.open(ifc_path)
+        building_info = extract_building_info(ifc_file_for_building)
+        
+        # Сохраняем building_info.json в папке сессии
+        building_json_path = Path(output_folder) / "building_info.json"
+        with open(building_json_path, 'w', encoding='utf-8') as f:
+            json.dump({
+                'success': True,
+                'source_file': os.path.basename(ifc_path),
+                'project': building_info.get('project', {}),
+                'building': building_info.get('building', {}),
+                'storeys': building_info.get('storeys', []),
+                'summary': building_info.get('summary', {})
+            }, f, ensure_ascii=False, indent=2)
+        
+        summary = building_info.get('summary', {})
+        print(f"   ✅ Информация об объекте:")
+        if summary.get('address'):
+            print(f"      Адрес: {summary['address']}")
+        if summary.get('total_height_from_zero_m'):
+            print(f"      Высота от нулевой отметки: {summary['total_height_from_zero_m']} м")
+        if summary.get('above_ground_storeys') is not None:
+            print(f"      Этажность: {summary['above_ground_storeys']} надземных + {summary.get('below_ground_storeys', 0)} подземных")
+        print(f"   ✅ building_info.json сохранен")
+    except Exception as e:
+        print(f"   ⚠️ Не удалось извлечь информацию об объекте: {e}")
+        building_info = None
     
     # Шаг 2: Создание сводной таблицы
     print("\n📊 Шаг 2: Создание сводной таблицы...")
@@ -1118,6 +1310,8 @@ def parse_ifc_file(ifc_path, output_folder):
     print(f"\n💾 Результаты сохранены в: {output_folder}")
     print(f"   • materials_summary.xlsx - сводная таблица")
     print(f"   • materials_summary.json - данные для обработки")
+    if building_info:
+        print(f"   • building_info.json - информация об объекте строительства")
     print(f"\n✅ Обработка IFC завершена. Всего элементов: {len(data)}, Уникальных материалов: {len(items)}")
     
     return result
