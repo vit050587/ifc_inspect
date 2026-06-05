@@ -954,23 +954,20 @@ def create_summary_table(data):
         "Ifc Class": "Тип элемента",
         "Материал_полный": "Материал",
         "count": "Количество, шт",
-        "total_volume_m3": "Объем, м³",
-        "total_area_m2": "Площадь, м²"
+        "total_volume_m3": "Объем, м³"
     })
     
     # Форматирование числовых значений
     summary["Объем, м³"] = summary["Объем, м³"].apply(lambda x: round(x, 3) if pd.notna(x) and x != 0 else None)
-    summary["Площадь, м²"] = summary["Площадь, м²"].apply(lambda x: round(x, 3) if pd.notna(x) and x != 0 else None)
     
     # Замена None на "-" для отображения
     summary["Объем, м³"] = summary["Объем, м³"].fillna("-")
-    summary["Площадь, м²"] = summary["Площадь, м²"].fillna("-")
     
     # Сортировка
     summary = summary.sort_values(by=["Тип (RU)", "Тип элемента", "Материал"], ascending=[True, True, True])
     
-    # Выбираем только нужные колонки в правильном порядке
-    summary = summary[["Тип (RU)", "Тип элемента", "Материал", "Количество, шт", "Объем, м³", "Площадь, м²"]]
+    # Выбираем только нужные колонки в правильном порядке (без Площади)
+    summary = summary[["Тип (RU)", "Тип элемента", "Материал", "Количество, шт", "Объем, м³"]]
     
     return summary
 
@@ -997,8 +994,7 @@ def main():
     print("\n--- ИТОГИ ПО КАТЕГОРИЯМ ---")
     totals = summary_df.groupby("Тип (RU)").agg(
         total_count=("Количество, шт", "sum"),
-        total_vol=("Объем, м³", lambda x: x.apply(lambda v: 0 if v == "-" else v).sum()),
-        total_area=("Площадь, м²", lambda x: x.apply(lambda v: 0 if v == "-" else v).sum())
+        total_vol=("Объем, м³", lambda x: x.apply(lambda v: 0 if v == "-" else v).sum())
     )
     print(totals.to_string())
     
