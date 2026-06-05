@@ -909,7 +909,13 @@ def create_summary_table(data):
     df = pd.DataFrame(data)
     
     # Список IFC классов для исключения (неинформативные элементы)
-    excluded_ifc_classes = ["IfcDiscreteAccessory", "IfcElementAssembly", "IfcOpeningElement"]
+    # IfcBuildingElementProxy - это элементы-заглушки, которые не имеют конкретной классификации
+    excluded_ifc_classes = [
+        "IfcDiscreteAccessory", 
+        "IfcElementAssembly", 
+        "IfcOpeningElement",
+        "IfcBuildingElementProxy"
+    ]
     
     # Фильтрация по IFC классам
     df = df[~df["Ifc Class"].isin(excluded_ifc_classes)]
