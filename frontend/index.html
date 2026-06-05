@@ -811,12 +811,17 @@
                             const ifcResults = resultsData.results.ifc_results;
                             document.getElementById('ifcElementsCount').textContent = ifcResults.total_elements || 0;
                             
-                            // Get materials count from xlsx_parser_results
-                            const xlsxResults = resultsData.results.xlsx_parser_results;
-                            if (xlsxResults && xlsxResults.success) {
-                                document.getElementById('materialsCount').textContent = xlsxResults.aggregated_materials || 0;
+                            // Get materials count from IFC results aggregated_materials
+                            if (ifcResults.aggregated_materials !== undefined) {
+                                document.getElementById('materialsCount').textContent = ifcResults.aggregated_materials || 0;
                             } else {
-                                document.getElementById('materialsCount').textContent = ifcResults.materials_count || 0;
+                                // Fallback to xlsx_parser_results or materials_count
+                                const xlsxResults = resultsData.results.xlsx_parser_results;
+                                if (xlsxResults && xlsxResults.success && xlsxResults.aggregated_materials) {
+                                    document.getElementById('materialsCount').textContent = xlsxResults.aggregated_materials || 0;
+                                } else {
+                                    document.getElementById('materialsCount').textContent = ifcResults.materials_count || 0;
+                                }
                             }
                             
                             // Get project info for stories, height, longName

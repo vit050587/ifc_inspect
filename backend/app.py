@@ -18,8 +18,17 @@ from scripts.volume_statement_parser import parse_volume_statement_pdfs
 
 # xlsx_parser module was removed - IFC parser now handles materials summary creation
 # parse_and_aggregate_specification is no longer needed since ifc_parser.create_summary_table does this
+# Stub function kept for backward compatibility but not used in process_files anymore
 def parse_and_aggregate_specification(session_folder):
     """Stub function - materials summary is now created by ifc_parser"""
+    materials_file = os.path.join(session_folder, 'materials_summary.xlsx')
+    if os.path.exists(materials_file):
+        return {
+            'success': True,
+            'source': 'ifc_parser',
+            'output_file': 'materials_summary.xlsx',
+            'aggregated_materials': 0  # Will be populated from results.json
+        }
     return {
         'success': False,
         'error': 'xlsx_parser module was removed - materials summary is created from IFC',
@@ -204,20 +213,29 @@ def process_files():
                     print(f"❌ Ошибка парсинга IFC: {e}")
                     session_info['ifc_error'] = str(e)
     
-    # Step 5: Parse Excel specification and aggregate materials data
+    # Step 5: Check if materials summary was created by IFC parser
     print("\n" + "="*60)
-    print("📊 ШАГ 5: ПАРСИНГ EXCEL СПЕЦИФИКАЦИИ")
+    print("📊 ШАГ 5: ПРОВЕРКА СВODНОЙ ТАБЛИЦЫ МАТЕРИАЛОВ (IFC)")
     print("="*60)
     
     try:
-        xlsx_results = parse_and_aggregate_specification(session_folder)
-        results['xlsx_parser_results'] = xlsx_results
-        if xlsx_results.get('success'):
+        materials_file = os.path.join(session_folder, 'materials_summary.xlsx')
+        if os.path.exists(materials_file):
+            # IFC parser already created the materials summary
             session_info['materials_excel_file'] = 'materials_summary.xlsx'
-            print(f"✅ Сводная таблица материалов создана: {session_info['materials_excel_file']}")
+            results['xlsx_parser_results'] = {
+                'success': True,
+                'source': 'ifc_parser',
+                'output_file': 'materials_summary.xlsx'
+            }
+            print(f"✅ Сводная таблица материалов найдена: {session_info['materials_excel_file']}")
+        else:
+            print("⚠️ Файл materials_summary.xlsx не найден")
+            results['xlsx_parser_results'] = {'success': False, 'error': 'Materials summary not found'}
     except Exception as e:
-        print(f"❌ Ошибка парсинга Excel спецификации: {e}")
+        print(f"❌ Ошибка проверки сводной таблицы: {e}")
         session_info['xlsx_parser_error'] = str(e)
+        results['xlsx_parser_results'] = {'success': False, 'error': str(e)}
     
     # Step 6: Parse volume statement PDFs and extract material tables
     print("\n" + "="*60)
@@ -266,6 +284,11 @@ def process_files():
     with open(session_info_path, 'w', encoding='utf-8') as f:
         json.dump(session_info, f, ensure_ascii=False, indent=2)
     
+    # Get aggregated_materials count from IFC results if available
+    aggregated_materials = 0
+    if results.get('ifc_results') and results['ifc_results'].get('aggregated_materials'):
+        aggregated_materials = results['ifc_results']['aggregated_materials']
+    
     return jsonify({
         'success': True,
         'session_id': session_id,
@@ -277,6 +300,8 @@ def process_files():
         'materials_excel_file': session_info.get('materials_excel_file'),
         'pdf_classification': results['pdf_classification'],
         'xlsx_parser_results': results['xlsx_parser_results'],
+        'ifc_results': results.get('ifc_results'),  # Add IFC results for materials count
+        'aggregated_materials': aggregated_materials,
         'summary': session_info['results_summary']
     })
 
