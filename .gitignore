@@ -1,8 +1,6 @@
 ```
-# Dependencies
+# Python
 __pycache__/
-
-# Compiled files
 *.pyc
 *.pyo
 *.pyd
@@ -20,16 +18,24 @@ __pycache__/
 .vscode/
 .idea/
 
+# Dependencies
+.venv/
+venv/
+node_modules/
+
+# Build artifacts
+dist/
+build/
+target/
+
 # Coverage
 .coverage
 coverage/
 htmlcov/
 
-# Python specific
-*.py[cod]
-*$py.class
-*.so
-.Python
-*.egg-info/
-.eggs/
+# MyPy
+.mypy_cache/
+
+# Pytest
+.pytest_cache/
 ```

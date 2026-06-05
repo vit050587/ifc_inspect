@@ -363,35 +363,54 @@ def get_materials_summary(session_id):
 
 @app.route('/api/building-height/<session_id>')
 def get_building_height(session_id):
-    """Get building height from IFC report Excel file"""
-    import openpyxl
+    """Get building height from building_info.json file"""
     
     session_folder = os.path.join(UPLOAD_FOLDER, session_id)
     if not os.path.exists(session_folder):
         return jsonify({'error': 'Session not found'}), 404
     
-    ifc_report_file = os.path.join(session_folder, 'ifc_report.xlsx')
-    if not os.path.exists(ifc_report_file):
-        return jsonify({'error': 'IFC report not found'}), 404
+    building_info_file = os.path.join(session_folder, 'building_info.json')
+    if not os.path.exists(building_info_file):
+        return jsonify({'error': 'Building info not found'}), 404
     
     try:
-        wb = openpyxl.load_workbook(ifc_report_file, data_only=True)
-        if 'Сводка' not in wb.sheetnames:
-            return jsonify({'error': 'Summary sheet not found'}), 404
+        with open(building_info_file, 'r', encoding='utf-8') as f:
+            building_info = json.load(f)
         
-        ws = wb['Сводка']
-        height = None
-        
-        # Find "Высота здания" row
-        for row in ws.iter_rows(values_only=True):
-            if row[0] and 'Высота здания' in str(row[0]):
-                height = row[1]
-                break
+        # Get height from summary.total_height_from_zero_m
+        height = building_info.get('summary', {}).get('total_height_from_zero_m')
         
         if height is not None:
             return jsonify({'height': height})
         else:
             return jsonify({'height': None})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/building-address/<session_id>')
+def get_building_address(session_id):
+    """Get building address from building_info.json file"""
+    
+    session_folder = os.path.join(UPLOAD_FOLDER, session_id)
+    if not os.path.exists(session_folder):
+        return jsonify({'error': 'Session not found'}), 404
+    
+    building_info_file = os.path.join(session_folder, 'building_info.json')
+    if not os.path.exists(building_info_file):
+        return jsonify({'error': 'Building info not found'}), 404
+    
+    try:
+        with open(building_info_file, 'r', encoding='utf-8') as f:
+            building_info = json.load(f)
+        
+        # Get address from summary.address
+        address = building_info.get('summary', {}).get('address')
+        
+        if address is not None:
+            return jsonify({'address': address})
+        else:
+            return jsonify({'address': None})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
