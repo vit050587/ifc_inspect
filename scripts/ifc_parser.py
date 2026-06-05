@@ -588,128 +588,131 @@ def extract_element_properties(element, psets):
 
 
 def classify_element(element, name, psets=None):
-    """Классификация элемента по категории"""
-    ifc_type = element.is_a()
+    """Классификация элемента на более детальные подтипы"""
+    element_type = element.is_a()
+    name_upper = name.upper() if name else ""
     
-    if ifc_type == "IfcWall":
-        return "Стена"
-    elif ifc_type == "IfcColumn":
-        return "Колонна"
-    elif ifc_type == "IfcSlab":
-        predefined = getattr(element, 'PredefinedType', None)
-        if predefined and 'FOUNDATION' in str(predefined).upper():
+    # Получаем информацию о бетоне для проверки класса
+    concrete_class = ""
+    if psets:
+        full_text = f"{name} "
+        for pset_name, pset_data in psets.items():
+            for prop_name, prop_val in pset_data.items():
+                if isinstance(prop_val, str):
+                    full_text += f"{prop_val} "
+        class_match = re.search(r'[BВ]\s?(\d+(?:[.,]\d+)?)', full_text.upper())
+        if class_match:
+            concrete_class = class_match.group(1).replace(',', '.')
+    
+    if element_type == "IfcSlab":
+        # Приоритет 1: Лестничные площадки (должны быть отдельно)
+        # Проверяем по имени элемента и по типу
+        if ("ЛЕСТНИЧ" in name_upper or "STAIR" in name_upper or 
+            "ПЛОЩАДК" in name_upper or "ПЛОЩ." in name_upper or
+            "ЛМ" in name_upper):
+            return "Лестница_Площадка"
+        
+        # Приоритет 2: Подготовка фундамента (низкие классы бетона, аномальные классы или явные маркеры)
+        # Классы бетона ниже В20 или аномальные (например В230) считаем подготовкой
+        try:
+            class_value = float(concrete_class) if concrete_class else 0
+            # Считаем подготовкой: класс < 20 ИЛИ класс > 100 (аномалия типа В230)
+            if class_value > 0 and (class_value < 20 or class_value > 100):
+                return "Фундамент_Подготовка_Бетон"
+        except ValueError:
+            pass
+        
+        if "ПОДГОТОВКА" in name_upper or "СТЯЖКА" in name_upper:
+            if "ПЕСОК" in name_upper or "SAND" in name_upper or "ЦЕМЕНТНО-ПЕСЧАНАЯ" in name_upper:
+                return "Фундамент_Подготовка_Песок"
+            elif "ЩЕБЕНЬ" in name_upper or "GRAVEL" in name_upper or "CRUSHED" in name_upper:
+                return "Фундамент_Подготовка_Щебень"
+            else:
+                return "Фундамент_Подготовка_Бетон"
+        
+        # Приоритет 3: Фундаментные плиты (ищем явные маркеры фундамента)
+        if ("ФУНДАМЕНТ" in name_upper and "ПОДГОТОВКА" not in name_upper) or \
+           "FOUNDATION SLAB" in name_upper or \
+           "BASE SLAB" in name_upper or \
+           "ФУНДАМЕНТНАЯ ПЛИТА" in name_upper:
             return "Фундамент_Плита"
+        
+        if "ФП" in name_upper and "ПЕРЕКРЫТИЕ" not in name_upper and "ПОДГОТОВКА" not in name_upper:
+            return "Фундамент_Плита"
+        
+        # Приоритет 4: Перекрытия (по умолчанию для плит)
         return "Перекрытие_Плита"
-    elif ifc_type == "IfcBeam":
-        return "Балка"
-    elif ifc_type == "IfcFooting":
-        return "Фундамент_Плита"
-    elif ifc_type == "IfcStairFlight":
+    
+    if element_type == "IfcWall":
+        return "Стена"
+    if element_type == "IfcColumn":
+        return "Колонна"
+    if element_type in ["IfcStair", "IfcStairFlight"]:
         return "Лестница_Марш"
-    elif ifc_type == "IfcStair":
-        return "Лестница_Площадка"
-    elif ifc_type == "IfcRamp":
-        return "Пандус"
-    elif ifc_type == "IfcPlate":
-        return "Перекрытие_Плита"
-    elif ifc_type == "IfcMember":
-        return "Элемент_каркаса"
-    elif ifc_type == "IfcFurnishingElement":
-        return "Мебель"
-    elif ifc_type == "IfcBuildingElementProxy":
-        return "Прочие_элементы"
-    elif ifc_type == "IfcOpeningElement":
-        return "Проем"
-    elif ifc_type == "IfcCurtainWall":
-        return "Навесная_стена"
-    elif ifc_type == "IfcWindow":
-        return "Окно"
-    elif ifc_type == "IfcDoor":
-        return "Дверь"
-    elif ifc_type == "IfcRoof":
-        return "Крыша"
-    elif ifc_type == "IfcPile":
-        return "Свая"
-    elif ifc_type == "IfcRailing":
-        return "Ограждение"
-    elif ifc_type == "IfcCovering":
-        return "Покрытие"
-    elif ifc_type == "IfcReinforcingMesh":
-        return "Арматурная_сетка"
-    elif ifc_type == "IfcBuildingStorey":
-        return "Этаж"
-    elif ifc_type == "IfcBuilding":
-        return "Здание"
-    else:
-        return "Прочее"
+    if element_type == "IfcBeam":
+        return "Балка"
+        
+    return element_type
 
 
 def parse_concrete_properties(name, psets):
-    """Извлечение характеристик бетона"""
-    result = {
-        "material": "Не указан",
-        "class": None,
-        "frost": None,
-        "water": None,
-        "reinforced": False,
+    """Парсинг свойств бетона из имени и PSets"""
+    props = {
+        "material": "Бетон",
+        "class": "",
+        "frost": "",
+        "water": "",
+        "reinforced": True,
         "type_detail": ""
     }
     
-    # Извлекаем материал из MGE_Material
-    for pset_name, props in psets.items():
-        if "MGE_Material" in props:
-            mat = props["MGE_Material"]
-            if mat and str(mat) != "0" and str(mat).strip():
-                result["material"] = str(mat).strip()
-                break
+    full_text = f"{name} "
+    for pset_name, pset_data in psets.items():
+        for prop_name, prop_val in pset_data.items():
+            if isinstance(prop_val, str):
+                full_text += f"{prop_val} "
     
-    # Извлекаем характеристики бетона
-    concrete_grade = None
-    freeze_durability = None
-    water_resist = None
+    full_text_upper = full_text.upper()
     
-    # Ищем в стандартных колонках MGE_*
-    for pset_name, props in psets.items():
-        if "MGE_ConcreteGrade" in props:
-            val = props["MGE_ConcreteGrade"]
-            if val and str(val) != "0" and str(val).strip():
-                concrete_grade = str(val).strip()
+    # Проверка на пенополистирол/утеплитель
+    if "ПЕНОПОЛИСТИРОЛ" in full_text_upper or "ЭКСТРУДИРОВАНН" in full_text_upper or "УТЕПЛИТЕЛ" in full_text_upper:
+        props["material"] = "Экструдированный пенополистирол"
+        props["type_detail"] = "Экструдированный пенополистирол"
+        props["reinforced"] = False
+        return props
+    
+    # Проверка на не бетонные материалы подготовки
+    if "ПЕСОК" in full_text_upper or "SAND" in full_text_upper:
+        props["material"] = "Песок"
+        props["type_detail"] = "Песок"
+        props["reinforced"] = False
+    elif "ЩЕБЕНЬ" in full_text_upper or "GRAVEL" in full_text_upper or "CRUSHED STONE" in full_text_upper:
+        props["material"] = "Щебень"
+        props["type_detail"] = "Щебень"
+        props["reinforced"] = False
+    elif "ПОДГОТОВКА" in full_text_upper and ("В7.5" in full_text_upper or "B7.5" in full_text_upper or "НЕАРМИРОВАННЫЙ" in full_text_upper):
+        props["type_detail"] = "Бетон неармированный (подготовка)"
+        props["reinforced"] = False
+
+    # Поиск класса бетона
+    class_match = re.search(r'[BВ]\s?(\d+(?:[.,]\d+)?)', full_text_upper)
+    if class_match:
+        val = class_match.group(1).replace(',', '.')
+        props["class"] = f"В{val}"
+        if float(val) < 15:
+             props["reinforced"] = False
+
+    # Поиск морозостойкости
+    frost_match = re.search(r'F\s?(\d+)', full_text_upper)
+    if frost_match:
+        props["frost"] = f"F{frost_match.group(1)}"
+    
+    # Поиск водонепроницаемости
+    water_match = re.search(r'W\s?(\d+)', full_text_upper)
+    if water_match:
+        props["water"] = f"W{water_match.group(1)}"
         
-        if "MGE_FreezeDurability" in props:
-            val = props["MGE_FreezeDurability"]
-            if val and str(val) != "0" and str(val).strip():
-                freeze_durability = str(val).strip()
-        
-        if "MGE_WaterResist" in props:
-            val = props["MGE_WaterResist"]
-            if val and str(val) != "0" and str(val).strip():
-                water_resist = str(val).strip()
-    
-    # Если марки нет в стандартных колонках, пытаемся извлечь из названия
-    if not concrete_grade and name:
-        grade_match = re.search(r'\b([BВ]\d+(?:\.\d+)?)\b', name)
-        if grade_match:
-            concrete_grade = grade_match.group(1)
-            if concrete_grade.startswith('B') and not concrete_grade.startswith('В'):
-                concrete_grade = 'В' + concrete_grade[1:]
-    
-    result["class"] = concrete_grade
-    result["frost"] = freeze_durability
-    result["water"] = water_resist
-    
-    # Формируем detail-описание
-    parts = []
-    if concrete_grade:
-        parts.append(concrete_grade)
-    if freeze_durability:
-        parts.append(freeze_durability)
-    if water_resist:
-        parts.append(water_resist)
-    
-    if parts:
-        result["type_detail"] = " ".join(parts)
-    
-    return result
+    return props
 
 
 def extract_ifc_data(ifc_path):
@@ -867,30 +870,41 @@ def get_russian_type_name(category, ifc_type):
 
 
 def format_material_string(material_props):
-    """Формирование строки материала с характеристиками"""
-    if not material_props:
-        return "-"
-    
+    """Форматирование строки материала с учетом класса и свойств"""
     material = material_props.get("material", "")
     concrete_class = material_props.get("class", "")
     frost = material_props.get("frost", "")
     water = material_props.get("water", "")
     type_detail = material_props.get("type_detail", "")
     
-    # Если есть detail-описание (класс бетона + характеристики), используем его
+    # Если есть type_detail, используем его
     if type_detail:
-        # Проверяем, является ли материал бетоном
-        if material and ('бетон' in material.lower() or 'раствор' in material.lower()):
-            return f"{material} {type_detail}".strip()
-        else:
-            # Для небетонных материалов просто возвращаем название
-            return material if material else "-"
+        return type_detail
     
-    # Если нет detail, но есть материал
-    if material and material != "Не указан":
-        return material
+    # Собираем полное описание материала
+    parts = [material] if material else []
     
-    return "-"
+    if concrete_class:
+        parts.append(concrete_class)
+    
+    if frost:
+        parts.append(frost)
+    
+    if water:
+        parts.append(water)
+    
+    # Если материал пустой, но есть свойства бетона
+    if not parts and (concrete_class or frost or water):
+        props = []
+        if concrete_class:
+            props.append(concrete_class)
+        if frost:
+            props.append(frost)
+        if water:
+            props.append(water)
+        return " ".join(props)
+    
+    return " ".join(parts) if parts else "-"
 
 
 def create_summary_table(data):

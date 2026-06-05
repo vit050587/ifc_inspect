@@ -4,19 +4,21 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-
-# Dependencies
+.Python
 venv/
 .venv/
 .env
 .env.local
-*.env.*
+.env.*
 
-# Logs and temp files
+# Uploads directory - assuming these contain temporary/generated files
+uploads/*.xlsx
+uploads/*.json
+
+# Logs
 *.log
-*.tmp
 
-# Editors
-.vscode/
-.idea/
+# OS generated files
+.DS_Store
+Thumbs.db
 ```
