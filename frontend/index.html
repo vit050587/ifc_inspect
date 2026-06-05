@@ -502,14 +502,6 @@
                 <div class="response-content">
                     <div class="results-grid">
                         <div class="result-card">
-                            <h3>Страниц с текстом в пояснительной записке</h3>
-                            <div class="value" id="textPagesCount">0</div>
-                        </div>
-                        <div class="result-card">
-                            <h3>Страниц с чертежами</h3>
-                            <div class="value" id="drawingPagesCount">0</div>
-                        </div>
-                        <div class="result-card">
                             <h3>Количество конструктивных элементов</h3>
                             <div class="value" id="ifcElementsCount">0</div>
                         </div>
@@ -552,14 +544,6 @@
                                 </tbody>
                             </table>
                         </div>
-                    </div>
-                    
-                    <!-- Pages Info Table -->
-                    <div class="pages-info" id="pagesInfo" style="display: none;">
-                        <table class="pages-table">
-                            <tbody id="pagesTableBody">
-                            </tbody>
-                        </table>
                     </div>
                     
                     <!-- IFC Viewer Section -->
@@ -795,12 +779,9 @@
             const resultsSection = document.getElementById('resultsSection');
             const downloadMaterialsSection = document.getElementById('downloadMaterialsSection');
             const materialsTableSection = document.getElementById('materialsTableSection');
-            const pagesInfo = document.getElementById('pagesInfo');
             const ifcViewerSection = document.getElementById('ifcViewerSection');
             
-            // Update counters - text and drawing pages from folders
-            document.getElementById('textPagesCount').textContent = data.text_pages_count || 0;
-            document.getElementById('drawingPagesCount').textContent = data.drawing_pages_count || 0;
+            // text_pages_count and drawing_pages_count are no longer displayed in the UI
             
             if (data.ifc_processed && data.summary) {
                 // Get detailed results
@@ -852,11 +833,7 @@
                 materialsTableSection.style.display = 'block';
             }
             
-            // Show pages info table
-            if (data.text_pages_count > 0 || data.drawing_pages_count > 0) {
-                pagesInfo.style.display = 'block';
-                loadPagesTable();
-            }
+            // Pages info table removed - only materials table is displayed
             
             resultsSection.classList.add('active');
         }
@@ -1311,32 +1288,6 @@
             `;
             
             viewerInfoDiv.style.display = 'block';
-        }
-        
-        async function loadPagesTable() {
-            try {
-                const response = await fetch(`/api/results/${sessionId}`);
-                const data = await response.json();
-                
-                const tbody = document.getElementById('pagesTableBody');
-                tbody.innerHTML = '';
-                
-                const allPages = [
-                    ...(data.results.text_pages || []),
-                    ...(data.results.drawing_pages || [])
-                ];
-                
-                allPages.forEach(page => {
-                    const row = document.createElement('tr');
-                    
-                    row.innerHTML = `
-                        <td>${page.source_file}</td>
-                    `;
-                    tbody.appendChild(row);
-                });
-            } catch (error) {
-                console.error('Error loading pages table:', error);
-            }
         }
         
         async function loadMaterialsTable() {
