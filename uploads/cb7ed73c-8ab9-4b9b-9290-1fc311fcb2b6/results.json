@@ -1,0 +1,103 @@
+{
+  "text_pages": [],
+  "drawing_pages": [],
+  "ifc_results": {
+    "success": true,
+    "excel_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/cb7ed73c-8ab9-4b9b-9290-1fc311fcb2b6/materials_summary.xlsx",
+    "excel_filename": "materials_summary.xlsx",
+    "json_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/cb7ed73c-8ab9-4b9b-9290-1fc311fcb2b6/materials_summary.json",
+    "total_elements": 3268,
+    "aggregated_materials": 14,
+    "total_count": 1351,
+    "total_volume": 8221.915
+  },
+  "pdf_classification": {
+    "categories": {
+      "volume_statement": 1,
+      "explanatory_note": 1
+    },
+    "files": {
+      "volume_statement": [
+        {
+          "filename": "ВОР КР.pdf",
+          "source_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/cb7ed73c-8ab9-4b9b-9290-1fc311fcb2b6/pdf_documents/ВОР КР.pdf",
+          "dest_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/cb7ed73c-8ab9-4b9b-9290-1fc311fcb2b6/volume_statement/ВОР КР.pdf",
+          "category": "volume_statement",
+          "pages_analyzed": 3,
+          "file_size": 999778
+        }
+      ],
+      "explanatory_note": [
+        {
+          "filename": "Текстовая и графическая часть КР.pdf",
+          "source_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/cb7ed73c-8ab9-4b9b-9290-1fc311fcb2b6/pdf_documents/Текстовая и графическая часть КР.pdf",
+          "dest_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/cb7ed73c-8ab9-4b9b-9290-1fc311fcb2b6/explanatory_note/Текстовая и графическая часть КР.pdf",
+          "category": "explanatory_note",
+          "pages_analyzed": 3,
+          "file_size": 10400384
+        }
+      ]
+    }
+  },
+  "materials_summary": null,
+  "xlsx_parser_results": null,
+  "volume_statement_results": {
+    "success": true,
+    "pdf_files_found": [
+      "ВОР КР.pdf"
+    ],
+    "total_records_extracted": 28,
+    "aggregated_items": 6,
+    "output_file": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/cb7ed73c-8ab9-4b9b-9290-1fc311fcb2b6/volume_statement_summary.xlsx",
+    "items": [
+      {
+        "type_ru": "Армирование",
+        "ifc_class": "IfcReinforcingMesh",
+        "material": "Арматура Ø22 Мм, А500С",
+        "count": "-",
+        "volume": 642.6,
+        "area": "-"
+      },
+      {
+        "type_ru": "Металлоконструкции",
+        "ifc_class": "IfcMember",
+        "material": "Сталь Ная Труба Стойка",
+        "count": "-",
+        "volume": 445.0,
+        "area": "-"
+      },
+      {
+        "type_ru": "Прочие_элементы",
+        "ifc_class": "IfcBuildingElementProxy",
+        "material": "F100",
+        "count": "-",
+        "volume": 16.0,
+        "area": "-"
+      },
+      {
+        "type_ru": "Прочие_элементы",
+        "ifc_class": "IfcBuildingElementProxy",
+        "material": "F150",
+        "count": "-",
+        "volume": 4103.45,
+        "area": "-"
+      },
+      {
+        "type_ru": "Прочие_элементы",
+        "ifc_class": "IfcBuildingElementProxy",
+        "material": "Железобетон Ных Конструкций",
+        "count": "-",
+        "volume": 2.0,
+        "area": "-"
+      },
+      {
+        "type_ru": "Прочие_элементы",
+        "ifc_class": "IfcBuildingElementProxy",
+        "material": "Железобетон Сборных Ных Конструкций",
+        "count": "-",
+        "volume": 2.0,
+        "area": "-"
+      }
+    ]
+  }
+}
