@@ -3,9 +3,9 @@
   "drawing_pages": [],
   "ifc_results": {
     "success": true,
-    "excel_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/cb7ed73c-8ab9-4b9b-9290-1fc311fcb2b6/materials_summary.xlsx",
+    "excel_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/0ffdfe59-d682-4326-8f82-502b830a9b68/materials_summary.xlsx",
     "excel_filename": "materials_summary.xlsx",
-    "json_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/cb7ed73c-8ab9-4b9b-9290-1fc311fcb2b6/materials_summary.json",
+    "json_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/0ffdfe59-d682-4326-8f82-502b830a9b68/materials_summary.json",
     "total_elements": 3268,
     "aggregated_materials": 14,
     "total_count": 1351,
@@ -20,8 +20,8 @@
       "volume_statement": [
         {
           "filename": "ВОР КР.pdf",
-          "source_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/cb7ed73c-8ab9-4b9b-9290-1fc311fcb2b6/pdf_documents/ВОР КР.pdf",
-          "dest_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/cb7ed73c-8ab9-4b9b-9290-1fc311fcb2b6/volume_statement/ВОР КР.pdf",
+          "source_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/0ffdfe59-d682-4326-8f82-502b830a9b68/pdf_documents/ВОР КР.pdf",
+          "dest_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/0ffdfe59-d682-4326-8f82-502b830a9b68/volume_statement/ВОР КР.pdf",
           "category": "volume_statement",
           "pages_analyzed": 3,
           "file_size": 999778
@@ -30,8 +30,8 @@
       "explanatory_note": [
         {
           "filename": "Текстовая и графическая часть КР.pdf",
-          "source_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/cb7ed73c-8ab9-4b9b-9290-1fc311fcb2b6/pdf_documents/Текстовая и графическая часть КР.pdf",
-          "dest_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/cb7ed73c-8ab9-4b9b-9290-1fc311fcb2b6/explanatory_note/Текстовая и графическая часть КР.pdf",
+          "source_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/0ffdfe59-d682-4326-8f82-502b830a9b68/pdf_documents/Текстовая и графическая часть КР.pdf",
+          "dest_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/0ffdfe59-d682-4326-8f82-502b830a9b68/explanatory_note/Текстовая и графическая часть КР.pdf",
           "category": "explanatory_note",
           "pages_analyzed": 3,
           "file_size": 10400384
@@ -48,7 +48,7 @@
     ],
     "total_records_extracted": 28,
     "aggregated_items": 6,
-    "output_file": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/cb7ed73c-8ab9-4b9b-9290-1fc311fcb2b6/volume_statement_summary.xlsx",
+    "output_file": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/0ffdfe59-d682-4326-8f82-502b830a9b68/volume_statement_summary.xlsx",
     "items": [
       {
         "type_ru": "Армирование",
