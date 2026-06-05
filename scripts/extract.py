@@ -781,18 +781,109 @@ def extract_ifc_data(ifc_path):
     return elements_data
 
 
+def get_russian_type_name(category, ifc_type):
+    """Получение русского названия типа элемента"""
+    type_mapping = {
+        "Балка": "Балки",
+        "Колонна": "Колонны",
+        "Стена": "Стены",
+        "Перекрытие_Плита": "Перекрытия",
+        "Фундамент_Плита": "Фундаментные_плиты",
+        "Фундамент_Подготовка_Бетон": "Подготовка_фундамента",
+        "Фундамент_Подготовка_Песок": "Подготовка_фундамента",
+        "Фундамент_Подготовка_Щебень": "Подготовка_фундамента",
+        "Лестница_Марш": "Лестничные_марши",
+        "Лестница_Площадка": "Лестничные_площадки",
+        "Пандус": "Пандусы",
+    }
+    
+    # Сначала пробуем по категории
+    if category in type_mapping:
+        return type_mapping[category]
+    
+    # Затем по IFC типу
+    ifc_type_mapping = {
+        "IfcBeam": "Балки",
+        "IfcColumn": "Колонны",
+        "IfcWall": "Стены",
+        "IfcSlab": "Перекрытия",
+        "IfcStairFlight": "Лестничные_марши",
+        "IfcStair": "Лестницы",
+        "IfcRamp": "Пандусы",
+        "IfcFooting": "Фундаменты",
+        "IfcPlate": "Плиты",
+        "IfcMember": "Элементы",
+    }
+    
+    if ifc_type in ifc_type_mapping:
+        return ifc_type_mapping[ifc_type]
+    
+    # Если не найдено, возвращаем категорию
+    return category if category else ifc_type
+
+
+def format_material_string(material_props):
+    """Форматирование строки материала с учетом класса и свойств"""
+    material = material_props.get("material", "")
+    concrete_class = material_props.get("class", "")
+    frost = material_props.get("frost", "")
+    water = material_props.get("water", "")
+    type_detail = material_props.get("type_detail", "")
+    
+    # Если есть type_detail, используем его
+    if type_detail:
+        return type_detail
+    
+    # Собираем полное описание материала
+    parts = [material] if material else []
+    
+    if concrete_class:
+        parts.append(concrete_class)
+    
+    if frost:
+        parts.append(frost)
+    
+    if water:
+        parts.append(water)
+    
+    # Если материал пустой, но есть свойства бетона
+    if not parts and (concrete_class or frost or water):
+        props = []
+        if concrete_class:
+            props.append(concrete_class)
+        if frost:
+            props.append(frost)
+        if water:
+            props.append(water)
+        return " ".join(props)
+    
+    return " ".join(parts) if parts else "-"
+
+
 def create_summary_table(data):
-    """Создание сводной таблицы"""
+    """Создание сводной таблицы в требуемом формате"""
     df = pd.DataFrame(data)
     
-    group_cols = [
-        "category", 
-        "material", 
-        "concrete_class", 
-        "frost_resistance", 
-        "water_permeability", 
-        "is_reinforced"
-    ]
+    # Добавляем колонку с русским названием типа
+    df["Тип (RU)"] = df.apply(
+        lambda row: get_russian_type_name(row.get("category", ""), row.get("Ifc Class", "")), 
+        axis=1
+    )
+    
+    # Добавляем колонку с полным описанием материала
+    df["Материал_полный"] = df.apply(
+        lambda row: format_material_string({
+            "material": row.get("material", ""),
+            "class": row.get("concrete_class", ""),
+            "frost": row.get("frost_resistance", ""),
+            "water": row.get("water_permeability", ""),
+            "type_detail": row.get("material_detail", "")
+        }),
+        axis=1
+    )
+    
+    # Группировка по типу, IFC классу и материалу
+    group_cols = ["Тип (RU)", "Ifc Class", "Материал_полный"]
     
     summary = df.groupby(group_cols, dropna=False).agg(
         count=("id" if "id" in df.columns else "Element Specific:GlobalId", "count"),
@@ -800,10 +891,28 @@ def create_summary_table(data):
         total_area_m2=("area_m2", "sum")
     ).reset_index()
     
-    summary["total_volume_m3"] = summary["total_volume_m3"].round(2)
-    summary["total_area_m2"] = summary["total_area_m2"].round(2)
+    # Переименовываем колонки в соответствии с требуемым форматом
+    summary = summary.rename(columns={
+        "Ifc Class": "Тип элемента",
+        "Материал_полный": "Материал",
+        "count": "Количество, шт",
+        "total_volume_m3": "Объем, м³",
+        "total_area_m2": "Площадь, м²"
+    })
     
-    summary = summary.sort_values(by=["category", "material", "concrete_class", "total_volume_m3"], ascending=[True, True, True, False])
+    # Форматирование числовых значений
+    summary["Объем, м³"] = summary["Объем, м³"].apply(lambda x: round(x, 3) if pd.notna(x) and x != 0 else None)
+    summary["Площадь, м²"] = summary["Площадь, м²"].apply(lambda x: round(x, 3) if pd.notna(x) and x != 0 else None)
+    
+    # Замена None на "-" для отображения
+    summary["Объем, м³"] = summary["Объем, м³"].fillna("-")
+    summary["Площадь, м²"] = summary["Площадь, м²"].fillna("-")
+    
+    # Сортировка
+    summary = summary.sort_values(by=["Тип (RU)", "Тип элемента", "Материал"], ascending=[True, True, True])
+    
+    # Выбираем только нужные колонки в правильном порядке
+    summary = summary[["Тип (RU)", "Тип элемента", "Материал", "Количество, шт", "Объем, м³", "Площадь, м²"]]
     
     return summary
 
@@ -828,20 +937,20 @@ def main():
     print(f"Сводная таблица сохранена в {EXCEL_OUTPUT}")
 
     print("\n--- ИТОГИ ПО КАТЕГОРИЯМ ---")
-    totals = summary_df.groupby("category").agg(
-        total_count=("count", "sum"),
-        total_vol=("total_volume_m3", "sum"),
-        total_area=("total_area_m2", "sum")
+    totals = summary_df.groupby("Тип (RU)").agg(
+        total_count=("Количество, шт", "sum"),
+        total_vol=("Объем, м³", lambda x: x.apply(lambda v: 0 if v == "-" else v).sum()),
+        total_area=("Площадь, м²", lambda x: x.apply(lambda v: 0 if v == "-" else v).sum())
     )
     print(totals.to_string())
     
     targets = {
-        "Стена": 3857.89,
-        "Перекрытие_Плита": 4294.95,
-        "Колонна": 94.28,
-        "Фундамент_Плита": 3042.14,
-        "Фундамент_Подготовка_Бетон": 619.08,
-        "Фундамент_Подготовка_Песок": 0.0
+        "Стены": 3857.89,
+        "Перекрытия": 4294.95,
+        "Колонны": 94.28,
+        "Фундаментные_плиты": 3042.14,
+        "Подготовка_фундамента": 619.08,
+        "Лестничные_марши": 0.0
     }
     
     print("\n--- СРАВНЕНИЕ С ЦЕЛЕВЫМИ ЗНАЧЕНИЯМИ ---")
