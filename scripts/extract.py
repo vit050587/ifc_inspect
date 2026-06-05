@@ -597,10 +597,22 @@ def extract_element_properties(element, psets):
     return data
 
 
-def classify_element(element, name):
+def classify_element(element, name, psets=None):
     """Классификация элемента на более детальные подтипы"""
     element_type = element.is_a()
     name_upper = name.upper() if name else ""
+    
+    # Получаем информацию о бетоне для проверки класса
+    concrete_class = ""
+    if psets:
+        full_text = f"{name} "
+        for pset_name, pset_data in psets.items():
+            for prop_name, prop_val in pset_data.items():
+                if isinstance(prop_val, str):
+                    full_text += f"{prop_val} "
+        class_match = re.search(r'[BВ]\s?(\d+(?:[.,]\d+)?)', full_text.upper())
+        if class_match:
+            concrete_class = class_match.group(1).replace(',', '.')
     
     if element_type == "IfcSlab":
         # Приоритет 1: Лестничные площадки (должны быть отдельно)
@@ -610,7 +622,15 @@ def classify_element(element, name):
             "ЛМ" in name_upper):
             return "Лестница_Площадка"
         
-        # Приоритет 2: Подготовка фундамента (песок, щебень, тощий бетон, стяжка)
+        # Приоритет 2: Подготовка фундамента (низкие классы бетона или явные маркеры)
+        # Классы бетона ниже В20 считаем подготовкой
+        try:
+            class_value = float(concrete_class) if concrete_class else 0
+            if class_value > 0 and class_value < 20:
+                return "Фундамент_Подготовка_Бетон"
+        except ValueError:
+            pass
+        
         if "ПОДГОТОВКА" in name_upper or "СТЯЖКА" in name_upper:
             if "ПЕСОК" in name_upper or "SAND" in name_upper or "ЦЕМЕНТНО-ПЕСЧАНАЯ" in name_upper:
                 return "Фундамент_Подготовка_Песок"
@@ -785,7 +805,7 @@ def extract_ifc_data(ifc_path):
         item["area_m2"] = round(area, 4)
         
         # Классификация и материал
-        category = classify_element(element, name)
+        category = classify_element(element, name, psets)
         material_props = parse_concrete_properties(name, psets)
         
         item["category"] = category

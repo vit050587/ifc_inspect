@@ -1,52 +1,78 @@
-```gitignore
-# Excel files
-*.xlsx
-
-# Python
+# Dependencies
 __pycache__/
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Logs and temporary files
+*.log
+*.tmp
+
+# Editor/IDE
+.vscode/
+.idea/
+
+# Coverage reports
+coverage/
+htmlcov/
+.coverage
+
+# Python specific
 *.pyc
 *.pyo
 *.pyd
+*.py~
+*.pyc
+__pycache__/
 .Python
-env/
-venv/
-.venv/
-.ENV
-.env
-*.env
-.env.*
-.env.local
-.env.dev
-.env.development
-.env.prod
-.env.production
-.env.test
-.env.testing
-.env.staging
-.env.preview
-.env.backup
-.coverage
-coverage/
-htmlcov/
+*.so
+*.egg-info/
+.eggs/
+
+# Build artifacts
+build/
+dist/
+*.egg
+*.whl
+*.spec
+
+# Testing
 .pytest_cache/
 .mypy_cache/
 .hypothesis/
-*.log
-*.sqlite3
-*.sqlite3-journal
+
+# OS generated files
 .DS_Store
 Thumbs.db
-.vscode/
-.idea/
 *.swp
 *.swo
-*.tmp
-```
 
-Wait, I need to reconsider. The only files mentioned are `data/summary.xlsx` and `scripts/extract.py`. An Excel file should not be ignored as it appears to be data for the project, and `.py` files are source code that shouldn't be ignored. Let me re-evaluate:
+# Excel and data files backup
+*.xlsx.bak
+*~$*.xlsx
 
-Since the changes include only source/config files (`.xlsx` and `.py`) and no build artifacts, dependencies, or temp files, the output should be empty.
-
-```gitignore
-
-```
+# Compressed files
+*.zip
+*.gz
+*.tar
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.zst
+*.lz4
+*.lzh
+*.cab
+*.arj
+*.rpm
+*.deb
+*.Z
+*.lz
+*.lzo
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst
