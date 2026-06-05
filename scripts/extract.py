@@ -884,6 +884,12 @@ def create_summary_table(data):
     """Создание сводной таблицы в требуемом формате"""
     df = pd.DataFrame(data)
     
+    # Список IFC классов для исключения (неинформативные элементы)
+    excluded_ifc_classes = ["IfcDiscreteAccessory", "IfcElementAssembly", "IfcOpeningElement"]
+    
+    # Фильтрация по IFC классам
+    df = df[~df["Ifc Class"].isin(excluded_ifc_classes)]
+    
     # Добавляем колонку с русским названием типа
     df["Тип (RU)"] = df.apply(
         lambda row: get_russian_type_name(row.get("category", ""), row.get("Ifc Class", "")), 
@@ -901,6 +907,29 @@ def create_summary_table(data):
         }),
         axis=1
     )
+    
+    # Фильтрация строк с неинформативными материалами
+    # Оставляем только если есть конкретный класс бетона (В25, В30 и т.д.) или detail-описание
+    def is_informative_material(row):
+        material_full = row["Материал_полный"]
+        concrete_class = row.get("concrete_class", "")
+        material_detail = row.get("material_detail", "")
+        
+        # Если есть detail-описание - это информативно
+        if material_detail:
+            return True
+        
+        # Если есть класс бетона (В25, В30, В7.5 и т.п.) - это информативно
+        if concrete_class and re.search(r'В\d+\.?\d*', concrete_class):
+            return True
+        
+        # Если материал содержит конкретное название (не просто "Бетон")
+        if material_full and material_full != "-" and len(material_full.split()) > 1:
+            return True
+            
+        return False
+    
+    df = df[df.apply(is_informative_material, axis=1)]
     
     # Группировка по типу, IFC классу и материалу
     group_cols = ["Тип (RU)", "Ifc Class", "Материал_полный"]
