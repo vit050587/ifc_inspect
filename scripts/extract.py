@@ -622,11 +622,12 @@ def classify_element(element, name, psets=None):
             "ЛМ" in name_upper):
             return "Лестница_Площадка"
         
-        # Приоритет 2: Подготовка фундамента (низкие классы бетона или явные маркеры)
-        # Классы бетона ниже В20 считаем подготовкой
+        # Приоритет 2: Подготовка фундамента (низкие классы бетона, аномальные классы или явные маркеры)
+        # Классы бетона ниже В20 или аномальные (например В230) считаем подготовкой
         try:
             class_value = float(concrete_class) if concrete_class else 0
-            if class_value > 0 and class_value < 20:
+            # Считаем подготовкой: класс < 20 ИЛИ класс > 100 (аномалия типа В230)
+            if class_value > 0 and (class_value < 20 or class_value > 100):
                 return "Фундамент_Подготовка_Бетон"
         except ValueError:
             pass
