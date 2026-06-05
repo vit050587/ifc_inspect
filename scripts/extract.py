@@ -940,15 +940,15 @@ def create_summary_table(data):
     
     # Фильтрация строк с неинформативными материалами
     # Оставляем только если есть конкретный класс бетона (В25, В30 и т.д.) или detail-описание
-    # ИСКЛЮЧЕНИЕ: Лестничные марши (IfcStairFlight) всегда включаем
+    # ИСКЛЮЧЕНИЕ: Лестницы (IfcStair) и лестничные марши (IfcStairFlight) всегда включаем
     def is_informative_material(row):
         material_full = row["Материал_полный"]
         concrete_class = row.get("concrete_class", "")
         material_detail = row.get("material_detail", "")
         ifc_class = row.get("Ifc Class", "")
         
-        # ИСКЛЮЧЕНИЕ: Лестничные марши всегда включаем в таблицу
-        if ifc_class == "IfcStairFlight":
+        # ИСКЛЮЧЕНИЕ: Лестницы и лестничные марши всегда включаем в таблицу
+        if ifc_class in ["IfcStair", "IfcStairFlight"]:
             return True
         
         # Если есть detail-описание - это информативно
