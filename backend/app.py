@@ -14,7 +14,6 @@ from scripts.pdf_classifier_llm import classify_pdf_files as classify_pdf_llm
 from scripts.draw_detector import extract_drawings_from_explanatory_note
 from scripts.ifc_viewer import prepare_ifc_for_viewer
 from scripts.ifc_parser import parse_ifc_file
-from scripts.xlsx_parser import parse_and_aggregate_specification
 from scripts.volume_statement_parser import parse_volume_statement_pdfs
 
 app = Flask(__name__, static_folder='../frontend', static_url_path='')
