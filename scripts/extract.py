@@ -547,6 +547,19 @@ def extract_element_properties(element, psets):
     for prop_name in ["31_Утеплитель Полистирол экструдированный", "GrossArea", "GrossVolume", "NetArea", "NetVolume", "Perimeter", "Width", "Бетон В30 F150 W8", "Бетон В7.5 неармированный", "В25 F100 W6"]:
         data[f"Qto_SlabBaseQuantities:{prop_name}"] = get_property_value(psets, "Qto_SlabBaseQuantities", prop_name)
     
+    # Извлекаем объемы слоев материалов из Qto_SlabBaseQuantities
+    slab_materials = {}
+    if "Qto_SlabBaseQuantities" in psets:
+        for prop_name, prop_val in psets["Qto_SlabBaseQuantities"].items():
+            if isinstance(prop_val, dict) and prop_val.get('type') == 'IfcPhysicalComplexQuantity':
+                # Это слой материала - извлекаем объем из properties
+                props = prop_val.get('properties', {})
+                if 'NetVolume' in props or 'GrossVolume' in props:
+                    vol = props.get('NetVolume', props.get('GrossVolume', 0))
+                    slab_materials[prop_name] = vol
+    
+    data["slab_materials"] = slab_materials
+    
     # Qto_StairFlightBaseQuantities
     data["Qto_StairFlightBaseQuantities:GrossVolume"] = get_property_value(psets, "Qto_StairFlightBaseQuantities", "GrossVolume")
     data["Qto_StairFlightBaseQuantities:Length"] = get_property_value(psets, "Qto_StairFlightBaseQuantities", "Length")
@@ -646,6 +659,13 @@ def parse_concrete_properties(name, psets):
                 full_text += f"{prop_val} "
     
     full_text_upper = full_text.upper()
+    
+    # Проверка на пенополистирол/утеплитель
+    if "ПЕНОПОЛИСТИРОЛ" in full_text_upper or "ЭКСТРУДИРОВАНН" in full_text_upper or "УТЕПЛИТЕЛ" in full_text_upper:
+        props["material"] = "Экструдированный пенополистирол"
+        props["type_detail"] = "Экструдированный пенополистирол"
+        props["reinforced"] = False
+        return props
     
     # Проверка на не бетонные материалы подготовки
     if "ПЕСОК" in full_text_upper or "SAND" in full_text_upper:
