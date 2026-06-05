@@ -11,6 +11,7 @@ import fitz  # PyMuPDF
 from pathlib import Path
 from typing import List, Dict, Any, Tuple
 import shutil
+import json
 
 
 # Пороговый размер для определения чертежа (большая сторона в см)

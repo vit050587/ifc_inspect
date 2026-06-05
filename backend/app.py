@@ -16,6 +16,16 @@ from scripts.ifc_viewer import prepare_ifc_for_viewer
 from scripts.ifc_parser import parse_ifc_file
 from scripts.volume_statement_parser import parse_volume_statement_pdfs
 
+# xlsx_parser module was removed - IFC parser now handles materials summary creation
+# parse_and_aggregate_specification is no longer needed since ifc_parser.create_summary_table does this
+def parse_and_aggregate_specification(session_folder):
+    """Stub function - materials summary is now created by ifc_parser"""
+    return {
+        'success': False,
+        'error': 'xlsx_parser module was removed - materials summary is created from IFC',
+        'aggregated_materials': 0
+    }
+
 app = Flask(__name__, static_folder='../frontend', static_url_path='')
 CORS(app)
 
