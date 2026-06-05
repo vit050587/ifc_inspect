@@ -1,298 +1,1000 @@
+#!/usr/bin/env python3
 """
-IFC Parser - Extracts ALL parameters from IFC elements WITHOUT unit conversion and WITHOUT subtracting openings.
-Generates Excel report with TWO sheets:
-  1. Summary - Model info (project name, stories count, building height, address, total elements count)
-  2. Elements - All elements with each parameter in a separate column.
-     Format: Columns = "Element Specific:Long Name", "Element Specific:Name", "Ifc Class", 
-             "PSetName:PropertyName" for all properties.
-     Rows = values for each element, plus rows for IfcBuilding and IfcBuildingStorey.
+IFC Extract - Единый скрипт для извлечения данных из IFC и создания сводной таблицы материалов.
+Работает внутри папки сессии.
+
+Очередность операций:
+1. extract_ifc_data() - извлекает все данные из IFC файла
+2. create_summary_table() - создает сводную таблицу по типам элементов и материалам
+3. Сохраняет только результирующий файл materials_summary.xlsx в папке сессии
+
+Формат выходной таблицы:
+Тип (RU) | Тип элемента | Материал (с характеристиками: Бетон В30 F150 W6) | Количество, шт | Объем, м³
 """
 
 import ifcopenshell
-import openpyxl
-from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
-from datetime import datetime
+import ifcopenshell.util.element
+import ifcopenshell.util.unit
+import json
 import os
+import math
+import re
+from collections import defaultdict
+from pathlib import Path
+from typing import Dict, List, Any, Optional, Tuple
+import pandas as pd
+import numpy as np
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
 
-# ----------------------------------------------------------------------
-# Helper functions for extracting property and quantity values
-# ----------------------------------------------------------------------
+# Список всех необходимых параметров (колонки)
+REQUIRED_COLUMNS = [
+    # Element Specific
+    "Element Specific:GlobalId",
+    "Element Specific:LongName",
+    "Element Specific:Name",
+    "Element Specific:ObjectType",
+    "Element Specific:PredefinedType",
+    "Element Specific:Tag",
+    # ExpCheckBuilding
+    "ExpCheckBuilding:MGE_BuildingAddress",
+    "ExpCheckBuilding:MGE_Customer",
+    "ExpCheckBuilding:MGE_Designer",
+    "ExpCheckBuilding:MGE_ElevationOfRefHeight",
+    "ExpCheckBuilding:MGE_ElevationOfTerrain",
+    "ExpCheckBuilding:MGE_FunctionalUse",
+    "ExpCheckBuilding:MGE_Korpus",
+    "ExpCheckBuilding:MGE_NumOfSection",
+    "ExpCheckBuilding:MGE_ObjectName",
+    "ExpCheckBuilding:MGE_ProjectCode",
+    "ExpCheckBuilding:MGE_ProjectName",
+    "ExpCheckBuilding:MGE_Section",
+    # ExpCheckBuildingStorey
+    "ExpCheckBuildingStorey:MGE_ComfortLevel",
+    # ExpCheck_Assembly
+    "ExpCheck_Assembly:MGE_AssemblyPlace",
+    "ExpCheck_Assembly:MGE_Gost",
+    "ExpCheck_Assembly:MGE_IsExternal",
+    "ExpCheck_Assembly:MGE_Name",
+    "ExpCheck_Assembly:MGE_Position",
+    # ExpCheck_Beam
+    "ExpCheck_Beam:MGE_BeamType",
+    "ExpCheck_Beam:MGE_ElementCode",
+    "ExpCheck_Beam:MGE_Gost",
+    "ExpCheck_Beam:MGE_Material",
+    "ExpCheck_Beam:MGE_MaterialCode",
+    "ExpCheck_Beam:MGE_Name",
+    "ExpCheck_Beam:MGE_Position",
+    "ExpCheck_Beam:MGE_SeriaNumber",
+    "ExpCheck_Beam:MGE_SteelGrade",
+    # ExpCheck_BeamReinforcement
+    "ExpCheck_BeamReinforcement:ReinforceStrengthClass",
+    # ExpCheck_Column
+    "ExpCheck_Column:MGE_ColumnType",
+    "ExpCheck_Column:MGE_ElementCode",
+    "ExpCheck_Column:MGE_Gost",
+    "ExpCheck_Column:MGE_Material",
+    "ExpCheck_Column:MGE_MaterialCode",
+    "ExpCheck_Column:MGE_Name",
+    "ExpCheck_Column:MGE_Position",
+    "ExpCheck_Column:MGE_SeriaNumber",
+    "ExpCheck_Column:MGE_SteelGrade",
+    # ExpCheck_ColumnReinforcement
+    "ExpCheck_ColumnReinforcement:MGE_ReinforceStrengthClass",
+    # ExpCheck_MaterialConcrete
+    "ExpCheck_MaterialConcrete:MGE_ConcreteGost",
+    "ExpCheck_MaterialConcrete:MGE_ConcreteGrade",
+    "ExpCheck_MaterialConcrete:MGE_FreezeDurability",
+    "ExpCheck_MaterialConcrete:MGE_WaterResist",
+    # ExpCheck_Ramp
+    "ExpCheck_Ramp:MGE_ElementCode",
+    "ExpCheck_Ramp:MGE_Gost",
+    "ExpCheck_Ramp:MGE_Material",
+    "ExpCheck_Ramp:MGE_MaterialCode",
+    "ExpCheck_Ramp:MGE_Name",
+    "ExpCheck_Ramp:MGE_Position",
+    "ExpCheck_Ramp:MGE_Section",
+    # ExpCheck_Slab
+    "ExpCheck_Slab:MGE_ElementCode",
+    "ExpCheck_Slab:MGE_Gost",
+    "ExpCheck_Slab:MGE_Material",
+    "ExpCheck_Slab:MGE_MaterialCode",
+    "ExpCheck_Slab:MGE_Name",
+    "ExpCheck_Slab:MGE_Position",
+    "ExpCheck_Slab:MGE_SlabType",
+    # ExpCheck_SlabReinforcement
+    "ExpCheck_SlabReinforcement:MGE_ReinforceStrengthClass",
+    # ExpCheck_StairFlight
+    "ExpCheck_StairFlight:MGE_ElementCode",
+    "ExpCheck_StairFlight:MGE_Gost",
+    "ExpCheck_StairFlight:MGE_Material",
+    "ExpCheck_StairFlight:MGE_MaterialCode",
+    "ExpCheck_StairFlight:MGE_Name",
+    "ExpCheck_StairFlight:MGE_Position",
+    "ExpCheck_StairFlight:MGE_Section",
+    # ExpCheck_Wall
+    "ExpCheck_Wall:MGE_ElementCode",
+    "ExpCheck_Wall:MGE_Gost",
+    "ExpCheck_Wall:MGE_Material",
+    "ExpCheck_Wall:MGE_MaterialCode",
+    "ExpCheck_Wall:MGE_Name",
+    "ExpCheck_Wall:MGE_Position",
+    # ExpCheck_WallReinforcement
+    "ExpCheck_WallReinforcement:MGE_ReinforceStrengthClass",
+    # Ifc Class
+    "Ifc Class",
+    # Pset_BeamCommon
+    "Pset_BeamCommon:IsExternal",
+    "Pset_BeamCommon:LoadBearing",
+    "Pset_BeamCommon:Reference",
+    "Pset_BeamCommon:Roll",
+    "Pset_BeamCommon:Slope",
+    "Pset_BeamCommon:Span",
+    # Pset_BuildingCommon
+    "Pset_BuildingCommon:ConstructionMethod",
+    "Pset_BuildingCommon:FireProtectionClass",
+    "Pset_BuildingCommon:IsLandmarked",
+    "Pset_BuildingCommon:NumberOfStoreys",
+    "Pset_BuildingCommon:Reference",
+    # Pset_BuildingElementProxyCommon
+    "Pset_BuildingElementProxyCommon:IsExternal",
+    "Pset_BuildingElementProxyCommon:Reference",
+    # Pset_BuildingStoreyCommon
+    "Pset_BuildingStoreyCommon:AboveGround",
+    "Pset_BuildingStoreyCommon:EntranceLevel",
+    "Pset_BuildingStoreyCommon:Reference",
+    "Pset_BuildingStoreyCommon:SprinklerProtection",
+    "Pset_BuildingStoreyCommon:SprinklerProtectionAutomatic",
+    # Pset_BuildingSystemCommon
+    "Pset_BuildingSystemCommon:Reference",
+    # Pset_ColumnCommon
+    "Pset_ColumnCommon:IsExternal",
+    "Pset_ColumnCommon:LoadBearing",
+    "Pset_ColumnCommon:Reference",
+    "Pset_ColumnCommon:Slope",
+    "Pset_ColumnCommon:ThermalTransmittance",
+    # Pset_ConcreteElementGeneral
+    "Pset_ConcreteElementGeneral:ConcreteCover",
+    "Pset_ConcreteElementGeneral:ConcreteCoverAtLinks",
+    "Pset_ConcreteElementGeneral:ConstructionMethod",
+    "Pset_ConcreteElementGeneral:ReinforcementVolumeRatio",
+    "Pset_ConcreteElementGeneral:StructuralClass",
+    # Pset_ElementAssemblyCommon
+    "Pset_ElementAssemblyCommon:Reference",
+    # Pset_EnvironmentalImpactIndicators
+    "Pset_EnvironmentalImpactIndicators:Reference",
+    # Pset_ManufacturerTypeInformation
+    "Pset_ManufacturerTypeInformation:AssemblyPlace",
+    "Pset_ManufacturerTypeInformation:Manufacturer",
+    # Pset_MemberCommon
+    "Pset_MemberCommon:IsExternal",
+    "Pset_MemberCommon:LoadBearing",
+    "Pset_MemberCommon:Reference",
+    # Pset_OpeningElementCommon
+    "Pset_OpeningElementCommon:Reference",
+    # Pset_PlateCommon
+    "Pset_PlateCommon:IsExternal",
+    "Pset_PlateCommon:LoadBearing",
+    "Pset_PlateCommon:Reference",
+    # Pset_RampCommon
+    "Pset_RampCommon:IsExternal",
+    "Pset_RampCommon:Reference",
+    # Pset_RampFlightCommon
+    "Pset_RampFlightCommon:Reference",
+    "Pset_RampFlightCommon:Slope",
+    # Pset_ReinforcementBarPitchOfBeam
+    "Pset_ReinforcementBarPitchOfBeam:Reference",
+    # Pset_ReinforcementBarPitchOfColumn
+    "Pset_ReinforcementBarPitchOfColumn:Reference",
+    # Pset_ReinforcementBarPitchOfSlab
+    "Pset_ReinforcementBarPitchOfSlab:Reference",
+    # Pset_ReinforcementBarPitchOfWall
+    "Pset_ReinforcementBarPitchOfWall:Reference",
+    # Pset_SlabCommon
+    "Pset_SlabCommon:IsExternal",
+    "Pset_SlabCommon:LoadBearing",
+    "Pset_SlabCommon:PitchAngle",
+    "Pset_SlabCommon:Reference",
+    "Pset_SlabCommon:ThermalTransmittance",
+    # Pset_StairFlightCommon
+    "Pset_StairFlightCommon:IsExternal",
+    "Pset_StairFlightCommon:LoadBearing",
+    "Pset_StairFlightCommon:Reference",
+    # Pset_WallCommon
+    "Pset_WallCommon:ExtendToStructure",
+    "Pset_WallCommon:IsExternal",
+    "Pset_WallCommon:LoadBearing",
+    "Pset_WallCommon:Reference",
+    "Pset_WallCommon:ThermalTransmittance",
+    # Qto_BeamBaseQuantities
+    "Qto_BeamBaseQuantities:CrossSectionArea",
+    "Qto_BeamBaseQuantities:GrossSurfaceArea",
+    "Qto_BeamBaseQuantities:GrossVolume",
+    "Qto_BeamBaseQuantities:Length",
+    "Qto_BeamBaseQuantities:NetSurfaceArea",
+    "Qto_BeamBaseQuantities:NetVolume",
+    "Qto_BeamBaseQuantities:OuterSurfaceArea",
+    # Qto_ColumnBaseQuantities
+    "Qto_ColumnBaseQuantities:CrossSectionArea",
+    "Qto_ColumnBaseQuantities:GrossVolume",
+    "Qto_ColumnBaseQuantities:Length",
+    "Qto_ColumnBaseQuantities:NetVolume",
+    "Qto_ColumnBaseQuantities:OuterSurfaceArea",
+    # Qto_MemberBaseQuantities
+    "Qto_MemberBaseQuantities:CrossSectionArea",
+    "Qto_MemberBaseQuantities:GrossSurfaceArea",
+    "Qto_MemberBaseQuantities:GrossVolume",
+    "Qto_MemberBaseQuantities:Length",
+    "Qto_MemberBaseQuantities:NetSurfaceArea",
+    "Qto_MemberBaseQuantities:NetVolume",
+    "Qto_MemberBaseQuantities:OuterSurfaceArea",
+    # Qto_OpeningElementBaseQuantities
+    "Qto_OpeningElementBaseQuantities:Area",
+    "Qto_OpeningElementBaseQuantities:Depth",
+    "Qto_OpeningElementBaseQuantities:Height",
+    "Qto_OpeningElementBaseQuantities:Width",
+    # Qto_SlabBaseQuantities
+    "Qto_SlabBaseQuantities:GrossArea",
+    "Qto_SlabBaseQuantities:GrossVolume",
+    "Qto_SlabBaseQuantities:NetArea",
+    "Qto_SlabBaseQuantities:NetVolume",
+    "Qto_SlabBaseQuantities:Perimeter",
+    "Qto_SlabBaseQuantities:Width",
+    # Qto_StairFlightBaseQuantities
+    "Qto_StairFlightBaseQuantities:GrossVolume",
+    "Qto_StairFlightBaseQuantities:Length",
+    "Qto_StairFlightBaseQuantities:NetVolume",
+    # Qto_WallBaseQuantities
+    "Qto_WallBaseQuantities:GrossSideArea",
+    "Qto_WallBaseQuantities:GrossVolume",
+    "Qto_WallBaseQuantities:Height",
+    "Qto_WallBaseQuantities:Length",
+    "Qto_WallBaseQuantities:NetSideArea",
+    "Qto_WallBaseQuantities:NetVolume",
+    "Qto_WallBaseQuantities:Width",
+    # Storey
+    "Storey",
+    # Type
+    "Type:GlobalId",
+    "Type:Name",
+]
 
-def get_property_value(prop):
-    """Extract value from IfcProperty of any type."""
+
+def get_unit_scale(ifc_file):
+    """Получить масштаб единиц из IFC файла"""
     try:
-        if prop.is_a('IfcPropertySingleValue'):
-            val = prop.NominalValue
-            if val is None:
-                return None
-            return val.wrappedValue if hasattr(val, 'wrappedValue') else val
-
-        elif prop.is_a('IfcPropertyEnumeratedValue'):
-            vals = prop.EnumerationValues
-            return ', '.join(str(v) for v in vals) if vals else None
-
-        elif prop.is_a('IfcPropertyListValue'):
-            vals = prop.ListValues
-            return ', '.join(str(v) for v in vals) if vals else None
-
-        elif prop.is_a('IfcPropertyBoundedValue'):
-            lower = prop.LowerBoundValue
-            upper = prop.UpperBoundValue
-            if lower and upper:
-                return f"{lower} – {upper}"
-            return lower or upper
-
-        else:   # Other property types - string representation
-            if hasattr(prop, 'NominalValue') and prop.NominalValue is not None:
-                val = prop.NominalValue
-                return val.wrappedValue if hasattr(val, 'wrappedValue') else val
-            return str(prop)
+        units = ifcopenshell.util.unit.get_unit_scale(ifc_file)
+        return units
     except:
-        return None
+        return 1.0
 
 
-def get_quantity_value(qty):
-    """Extract numeric value from IfcPhysicalQuantity WITHOUT unit conversion."""
+def calculate_volume_by_geometry(shape, unit_scale):
+    """Расчет объема через bounding box с учетом масштаба"""
     try:
-        if qty.is_a('IfcQuantityLength'):
-            val = qty.LengthValue
-        elif qty.is_a('IfcQuantityArea'):
-            val = qty.AreaValue
-        elif qty.is_a('IfcQuantityVolume'):
-            val = qty.VolumeValue
-        elif qty.is_a('IfcQuantityCount'):
-            val = qty.CountValue
-        elif qty.is_a('IfcQuantityWeight'):
-            val = qty.WeightValue
-        else:
-            val = getattr(qty, 'NominalValue', None)
-
-        if val is None:
-            return None
-        return val.wrappedValue if hasattr(val, 'wrappedValue') else val
-    except:
-        return None
+        bbox_min = shape.bounding_box.lower_corner
+        bbox_max = shape.bounding_box.upper_corner
+        
+        dx = (bbox_max[0] - bbox_min[0]) * unit_scale
+        dy = (bbox_max[1] - bbox_min[1]) * unit_scale
+        dz = (bbox_max[2] - bbox_min[2]) * unit_scale
+        
+        return abs(dx * dy * dz)
+    except Exception as e:
+        return 0.0
 
 
-def get_element_storey(element, ifc_file):
-    """Get the storey/building name that contains this element."""
+def calculate_area_by_geometry(shape, unit_scale):
+    """Расчет площади поверхности через геометрию"""
     try:
-        inverses = ifc_file.get_inverse(element)
-        for inv in inverses:
-            if inv.is_a() == 'IfcRelContainedInSpatialStructure':
-                relating = getattr(inv, 'RelatingStructure', None)
-                if relating:
-                    return getattr(relating, 'Name', None) or getattr(relating, 'LongName', None)
-    except:
-        pass
+        area = shape.geometry.surface_area
+        return area * (unit_scale ** 2)
+    except Exception as e:
+        return 0.0
+
+
+def get_property_value(psets, pset_name, prop_name):
+    """Получить значение свойства из psets"""
+    if pset_name in psets:
+        props = psets[pset_name]
+        if prop_name in props:
+            val = props[prop_name]
+            if val is not None and prop_name != 'id':
+                return val
     return None
 
 
-def get_element_properties(element, ifc_file, include_type_props=True):
-    """Collect all element parameters (attributes, PropertySet, Quantity, Type) WITHOUT unit conversion.
-    Returns dict with keys like 'Element Specific:Long Name', 'PSetName:PropertyName', etc.
-    """
-    props = {}
+def extract_element_properties(element, psets):
+    """Извлечь все свойства элемента согласно REQUIRED_COLUMNS"""
+    data = {}
     
-    # Storey/Building containment
-    storey_name = get_element_storey(element, ifc_file)
-    if storey_name:
-        props['Storey'] = storey_name
-
-    # Basic IfcElement attributes with "Element Specific:" prefix
-    base_attrs = ['GlobalId', 'Name', 'Description', 'Tag', 'ObjectType', 'LongName', 'PredefinedType']
-    for attr in base_attrs:
-        val = getattr(element, attr, None)
-        if val is not None:
-            props[f'Element Specific:{attr}'] = val
+    # Element Specific properties
+    data["Element Specific:GlobalId"] = getattr(element, 'GlobalId', None)
+    data["Element Specific:LongName"] = getattr(element, 'LongName', None)
+    data["Element Specific:Name"] = getattr(element, 'Name', None)
+    data["Element Specific:ObjectType"] = getattr(element, 'ObjectType', None)
+    data["Element Specific:PredefinedType"] = getattr(element, 'PredefinedType', None)
+    data["Element Specific:Tag"] = getattr(element, 'Tag', None)
     
-    # IFC Class
-    props['Ifc Class'] = element.is_a()
+    # ExpCheckBuilding
+    data["ExpCheckBuilding:MGE_BuildingAddress"] = get_property_value(psets, "ExpCheck_Building", "MGE_BuildingAddress")
+    data["ExpCheckBuilding:MGE_Customer"] = get_property_value(psets, "ExpCheck_Building", "MGE_Customer")
+    data["ExpCheckBuilding:MGE_Designer"] = get_property_value(psets, "ExpCheck_Building", "MGE_Designer")
+    data["ExpCheckBuilding:MGE_ElevationOfRefHeight"] = get_property_value(psets, "ExpCheck_Building", "MGE_ElevationOfRefHeight")
+    data["ExpCheckBuilding:MGE_ElevationOfTerrain"] = get_property_value(psets, "ExpCheck_Building", "MGE_ElevationOfTerrain")
+    data["ExpCheckBuilding:MGE_FunctionalUse"] = get_property_value(psets, "ExpCheck_Building", "MGE_FunctionalUse")
+    data["ExpCheckBuilding:MGE_Korpus"] = get_property_value(psets, "ExpCheck_Building", "MGE_Korpus")
+    data["ExpCheckBuilding:MGE_NumOfSection"] = get_property_value(psets, "ExpCheck_Building", "MGE_NumOfSection")
+    data["ExpCheckBuilding:MGE_ObjectName"] = get_property_value(psets, "ExpCheck_Building", "MGE_ObjectName")
+    data["ExpCheckBuilding:MGE_ProjectCode"] = get_property_value(psets, "ExpCheck_Building", "MGE_ProjectCode")
+    data["ExpCheckBuilding:MGE_ProjectName"] = get_property_value(psets, "ExpCheck_Building", "MGE_ProjectName")
+    data["ExpCheckBuilding:MGE_Section"] = get_property_value(psets, "ExpCheck_Building", "MGE_Section")
+    
+    # ExpCheckBuildingStorey
+    data["ExpCheckBuildingStorey:MGE_ComfortLevel"] = get_property_value(psets, "ExpCheck_BuildingStorey", "MGE_ComfortLevel")
+    
+    # ExpCheck_Assembly
+    data["ExpCheck_Assembly:MGE_AssemblyPlace"] = get_property_value(psets, "ExpCheck_Assembly", "MGE_AssemblyPlace")
+    data["ExpCheck_Assembly:MGE_Gost"] = get_property_value(psets, "ExpCheck_Assembly", "MGE_Gost")
+    data["ExpCheck_Assembly:MGE_IsExternal"] = get_property_value(psets, "ExpCheck_Assembly", "MGE_IsExternal")
+    data["ExpCheck_Assembly:MGE_Name"] = get_property_value(psets, "ExpCheck_Assembly", "MGE_Name")
+    data["ExpCheck_Assembly:MGE_Position"] = get_property_value(psets, "ExpCheck_Assembly", "MGE_Position")
+    
+    # ExpCheck_Beam
+    data["ExpCheck_Beam:MGE_BeamType"] = get_property_value(psets, "ExpCheck_Beam", "MGE_BeamType")
+    data["ExpCheck_Beam:MGE_ElementCode"] = get_property_value(psets, "ExpCheck_Beam", "MGE_ElementCode")
+    data["ExpCheck_Beam:MGE_Gost"] = get_property_value(psets, "ExpCheck_Beam", "MGE_Gost")
+    data["ExpCheck_Beam:MGE_Material"] = get_property_value(psets, "ExpCheck_Beam", "MGE_Material")
+    data["ExpCheck_Beam:MGE_MaterialCode"] = get_property_value(psets, "ExpCheck_Beam", "MGE_MaterialCode")
+    data["ExpCheck_Beam:MGE_Name"] = get_property_value(psets, "ExpCheck_Beam", "MGE_Name")
+    data["ExpCheck_Beam:MGE_Position"] = get_property_value(psets, "ExpCheck_Beam", "MGE_Position")
+    data["ExpCheck_Beam:MGE_SeriaNumber"] = get_property_value(psets, "ExpCheck_Beam", "MGE_SeriaNumber")
+    data["ExpCheck_Beam:MGE_SteelGrade"] = get_property_value(psets, "ExpCheck_Beam", "MGE_SteelGrade")
+    
+    # ExpCheck_BeamReinforcement
+    data["ExpCheck_BeamReinforcement:ReinforceStrengthClass"] = get_property_value(psets, "ExpCheck_BeamReinforcement", "ReinforceStrengthClass")
+    
+    # ExpCheck_Column
+    data["ExpCheck_Column:MGE_ColumnType"] = get_property_value(psets, "ExpCheck_Column", "MGE_ColumnType")
+    data["ExpCheck_Column:MGE_ElementCode"] = get_property_value(psets, "ExpCheck_Column", "MGE_ElementCode")
+    data["ExpCheck_Column:MGE_Gost"] = get_property_value(psets, "ExpCheck_Column", "MGE_Gost")
+    data["ExpCheck_Column:MGE_Material"] = get_property_value(psets, "ExpCheck_Column", "MGE_Material")
+    data["ExpCheck_Column:MGE_MaterialCode"] = get_property_value(psets, "ExpCheck_Column", "MGE_MaterialCode")
+    data["ExpCheck_Column:MGE_Name"] = get_property_value(psets, "ExpCheck_Column", "MGE_Name")
+    data["ExpCheck_Column:MGE_Position"] = get_property_value(psets, "ExpCheck_Column", "MGE_Position")
+    data["ExpCheck_Column:MGE_SeriaNumber"] = get_property_value(psets, "ExpCheck_Column", "MGE_SeriaNumber")
+    data["ExpCheck_Column:MGE_SteelGrade"] = get_property_value(psets, "ExpCheck_Column", "MGE_SteelGrade")
+    
+    # ExpCheck_ColumnReinforcement
+    data["ExpCheck_ColumnReinforcement:MGE_ReinforceStrengthClass"] = get_property_value(psets, "ExpCheck_ColumnReinforcement", "MGE_ReinforceStrengthClass")
+    
+    # ExpCheck_MaterialConcrete
+    data["ExpCheck_MaterialConcrete:MGE_ConcreteGost"] = get_property_value(psets, "ExpCheck_MaterialConcrete", "MGE_ConcreteGost")
+    data["ExpCheck_MaterialConcrete:MGE_ConcreteGrade"] = get_property_value(psets, "ExpCheck_MaterialConcrete", "MGE_ConcreteGrade")
+    data["ExpCheck_MaterialConcrete:MGE_FreezeDurability"] = get_property_value(psets, "ExpCheck_MaterialConcrete", "MGE_FreezeDurability")
+    data["ExpCheck_MaterialConcrete:MGE_WaterResist"] = get_property_value(psets, "ExpCheck_MaterialConcrete", "MGE_WaterResist")
+    
+    # ExpCheck_Ramp
+    data["ExpCheck_Ramp:MGE_ElementCode"] = get_property_value(psets, "ExpCheck_Ramp", "MGE_ElementCode")
+    data["ExpCheck_Ramp:MGE_Gost"] = get_property_value(psets, "ExpCheck_Ramp", "MGE_Gost")
+    data["ExpCheck_Ramp:MGE_Material"] = get_property_value(psets, "ExpCheck_Ramp", "MGE_Material")
+    data["ExpCheck_Ramp:MGE_MaterialCode"] = get_property_value(psets, "ExpCheck_Ramp", "MGE_MaterialCode")
+    data["ExpCheck_Ramp:MGE_Name"] = get_property_value(psets, "ExpCheck_Ramp", "MGE_Name")
+    data["ExpCheck_Ramp:MGE_Position"] = get_property_value(psets, "ExpCheck_Ramp", "MGE_Position")
+    data["ExpCheck_Ramp:MGE_Section"] = get_property_value(psets, "ExpCheck_Ramp", "MGE_Section")
+    
+    # ExpCheck_Slab
+    data["ExpCheck_Slab:MGE_ElementCode"] = get_property_value(psets, "ExpCheck_Slab", "MGE_ElementCode")
+    data["ExpCheck_Slab:MGE_Gost"] = get_property_value(psets, "ExpCheck_Slab", "MGE_Gost")
+    data["ExpCheck_Slab:MGE_Material"] = get_property_value(psets, "ExpCheck_Slab", "MGE_Material")
+    data["ExpCheck_Slab:MGE_MaterialCode"] = get_property_value(psets, "ExpCheck_Slab", "MGE_MaterialCode")
+    data["ExpCheck_Slab:MGE_Name"] = get_property_value(psets, "ExpCheck_Slab", "MGE_Name")
+    data["ExpCheck_Slab:MGE_Position"] = get_property_value(psets, "ExpCheck_Slab", "MGE_Position")
+    data["ExpCheck_Slab:MGE_SlabType"] = get_property_value(psets, "ExpCheck_Slab", "MGE_SlabType")
+    
+    # ExpCheck_SlabReinforcement
+    data["ExpCheck_SlabReinforcement:MGE_ReinforceStrengthClass"] = get_property_value(psets, "ExpCheck_SlabReinforcement", "MGE_ReinforceStrengthClass")
+    
+    # ExpCheck_StairFlight
+    data["ExpCheck_StairFlight:MGE_ElementCode"] = get_property_value(psets, "ExpCheck_StairFlight", "MGE_ElementCode")
+    data["ExpCheck_StairFlight:MGE_Gost"] = get_property_value(psets, "ExpCheck_StairFlight", "MGE_Gost")
+    data["ExpCheck_StairFlight:MGE_Material"] = get_property_value(psets, "ExpCheck_StairFlight", "MGE_Material")
+    data["ExpCheck_StairFlight:MGE_MaterialCode"] = get_property_value(psets, "ExpCheck_StairFlight", "MGE_MaterialCode")
+    data["ExpCheck_StairFlight:MGE_Name"] = get_property_value(psets, "ExpCheck_StairFlight", "MGE_Name")
+    data["ExpCheck_StairFlight:MGE_Position"] = get_property_value(psets, "ExpCheck_StairFlight", "MGE_Position")
+    data["ExpCheck_StairFlight:MGE_Section"] = get_property_value(psets, "ExpCheck_StairFlight", "MGE_Section")
+    
+    # ExpCheck_Wall
+    data["ExpCheck_Wall:MGE_ElementCode"] = get_property_value(psets, "ExpCheck_Wall", "MGE_ElementCode")
+    data["ExpCheck_Wall:MGE_Gost"] = get_property_value(psets, "ExpCheck_Wall", "MGE_Gost")
+    data["ExpCheck_Wall:MGE_Material"] = get_property_value(psets, "ExpCheck_Wall", "MGE_Material")
+    data["ExpCheck_Wall:MGE_MaterialCode"] = get_property_value(psets, "ExpCheck_Wall", "MGE_MaterialCode")
+    data["ExpCheck_Wall:MGE_Name"] = get_property_value(psets, "ExpCheck_Wall", "MGE_Name")
+    data["ExpCheck_Wall:MGE_Position"] = get_property_value(psets, "ExpCheck_Wall", "MGE_Position")
+    
+    # ExpCheck_WallReinforcement
+    data["ExpCheck_WallReinforcement:MGE_ReinforceStrengthClass"] = get_property_value(psets, "ExpCheck_WallReinforcement", "MGE_ReinforceStrengthClass")
+    
+    # Ifc Class
+    data["Ifc Class"] = element.is_a()
+    
+    # Pset_BeamCommon
+    data["Pset_BeamCommon:IsExternal"] = get_property_value(psets, "Pset_BeamCommon", "IsExternal")
+    data["Pset_BeamCommon:LoadBearing"] = get_property_value(psets, "Pset_BeamCommon", "LoadBearing")
+    data["Pset_BeamCommon:Reference"] = get_property_value(psets, "Pset_BeamCommon", "Reference")
+    data["Pset_BeamCommon:Roll"] = get_property_value(psets, "Pset_BeamCommon", "Roll")
+    data["Pset_BeamCommon:Slope"] = get_property_value(psets, "Pset_BeamCommon", "Slope")
+    data["Pset_BeamCommon:Span"] = get_property_value(psets, "Pset_BeamCommon", "Span")
+    
+    # Pset_BuildingCommon
+    data["Pset_BuildingCommon:ConstructionMethod"] = get_property_value(psets, "Pset_BuildingCommon", "ConstructionMethod")
+    data["Pset_BuildingCommon:FireProtectionClass"] = get_property_value(psets, "Pset_BuildingCommon", "FireProtectionClass")
+    data["Pset_BuildingCommon:IsLandmarked"] = get_property_value(psets, "Pset_BuildingCommon", "IsLandmarked")
+    data["Pset_BuildingCommon:NumberOfStoreys"] = get_property_value(psets, "Pset_BuildingCommon", "NumberOfStoreys")
+    data["Pset_BuildingCommon:Reference"] = get_property_value(psets, "Pset_BuildingCommon", "Reference")
+    
+    # Pset_BuildingElementProxyCommon
+    data["Pset_BuildingElementProxyCommon:IsExternal"] = get_property_value(psets, "Pset_BuildingElementProxyCommon", "IsExternal")
+    data["Pset_BuildingElementProxyCommon:Reference"] = get_property_value(psets, "Pset_BuildingElementProxyCommon", "Reference")
+    
+    # Pset_BuildingStoreyCommon
+    data["Pset_BuildingStoreyCommon:AboveGround"] = get_property_value(psets, "Pset_BuildingStoreyCommon", "AboveGround")
+    data["Pset_BuildingStoreyCommon:EntranceLevel"] = get_property_value(psets, "Pset_BuildingStoreyCommon", "EntranceLevel")
+    data["Pset_BuildingStoreyCommon:Reference"] = get_property_value(psets, "Pset_BuildingStoreyCommon", "Reference")
+    data["Pset_BuildingStoreyCommon:SprinklerProtection"] = get_property_value(psets, "Pset_BuildingStoreyCommon", "SprinklerProtection")
+    data["Pset_BuildingStoreyCommon:SprinklerProtectionAutomatic"] = get_property_value(psets, "Pset_BuildingStoreyCommon", "SprinklerProtectionAutomatic")
+    
+    # Pset_BuildingSystemCommon
+    data["Pset_BuildingSystemCommon:Reference"] = get_property_value(psets, "Pset_BuildingSystemCommon", "Reference")
+    
+    # Pset_ColumnCommon
+    data["Pset_ColumnCommon:IsExternal"] = get_property_value(psets, "Pset_ColumnCommon", "IsExternal")
+    data["Pset_ColumnCommon:LoadBearing"] = get_property_value(psets, "Pset_ColumnCommon", "LoadBearing")
+    data["Pset_ColumnCommon:Reference"] = get_property_value(psets, "Pset_ColumnCommon", "Reference")
+    data["Pset_ColumnCommon:Slope"] = get_property_value(psets, "Pset_ColumnCommon", "Slope")
+    data["Pset_ColumnCommon:ThermalTransmittance"] = get_property_value(psets, "Pset_ColumnCommon", "ThermalTransmittance")
+    
+    # Pset_ConcreteElementGeneral
+    data["Pset_ConcreteElementGeneral:ConcreteCover"] = get_property_value(psets, "Pset_ConcreteElementGeneral", "ConcreteCover")
+    data["Pset_ConcreteElementGeneral:ConcreteCoverAtLinks"] = get_property_value(psets, "Pset_ConcreteElementGeneral", "ConcreteCoverAtLinks")
+    data["Pset_ConcreteElementGeneral:ConstructionMethod"] = get_property_value(psets, "Pset_ConcreteElementGeneral", "ConstructionMethod")
+    data["Pset_ConcreteElementGeneral:ReinforcementVolumeRatio"] = get_property_value(psets, "Pset_ConcreteElementGeneral", "ReinforcementVolumeRatio")
+    data["Pset_ConcreteElementGeneral:StructuralClass"] = get_property_value(psets, "Pset_ConcreteElementGeneral", "StructuralClass")
+    
+    # Pset_ElementAssemblyCommon
+    data["Pset_ElementAssemblyCommon:Reference"] = get_property_value(psets, "Pset_ElementAssemblyCommon", "Reference")
+    
+    # Pset_EnvironmentalImpactIndicators
+    data["Pset_EnvironmentalImpactIndicators:Reference"] = get_property_value(psets, "Pset_EnvironmentalImpactIndicators", "Reference")
+    
+    # Pset_ManufacturerTypeInformation
+    data["Pset_ManufacturerTypeInformation:AssemblyPlace"] = get_property_value(psets, "Pset_ManufacturerTypeInformation", "AssemblyPlace")
+    data["Pset_ManufacturerTypeInformation:Manufacturer"] = get_property_value(psets, "Pset_ManufacturerTypeInformation", "Manufacturer")
+    
+    # Pset_MemberCommon
+    data["Pset_MemberCommon:IsExternal"] = get_property_value(psets, "Pset_MemberCommon", "IsExternal")
+    data["Pset_MemberCommon:LoadBearing"] = get_property_value(psets, "Pset_MemberCommon", "LoadBearing")
+    data["Pset_MemberCommon:Reference"] = get_property_value(psets, "Pset_MemberCommon", "Reference")
+    
+    # Pset_OpeningElementCommon
+    data["Pset_OpeningElementCommon:Reference"] = get_property_value(psets, "Pset_OpeningElementCommon", "Reference")
+    
+    # Pset_PlateCommon
+    data["Pset_PlateCommon:IsExternal"] = get_property_value(psets, "Pset_PlateCommon", "IsExternal")
+    data["Pset_PlateCommon:LoadBearing"] = get_property_value(psets, "Pset_PlateCommon", "LoadBearing")
+    data["Pset_PlateCommon:Reference"] = get_property_value(psets, "Pset_PlateCommon", "Reference")
+    
+    # Pset_RampCommon
+    data["Pset_RampCommon:IsExternal"] = get_property_value(psets, "Pset_RampCommon", "IsExternal")
+    data["Pset_RampCommon:Reference"] = get_property_value(psets, "Pset_RampCommon", "Reference")
+    
+    # Pset_RampFlightCommon
+    data["Pset_RampFlightCommon:Reference"] = get_property_value(psets, "Pset_RampFlightCommon", "Reference")
+    data["Pset_RampFlightCommon:Slope"] = get_property_value(psets, "Pset_RampFlightCommon", "Slope")
+    
+    # Pset_ReinforcementBarPitchOfBeam
+    data["Pset_ReinforcementBarPitchOfBeam:Reference"] = get_property_value(psets, "Pset_ReinforcementBarPitchOfBeam", "Reference")
+    
+    # Pset_ReinforcementBarPitchOfColumn
+    data["Pset_ReinforcementBarPitchOfColumn:Reference"] = get_property_value(psets, "Pset_ReinforcementBarPitchOfColumn", "Reference")
+    
+    # Pset_ReinforcementBarPitchOfSlab
+    data["Pset_ReinforcementBarPitchOfSlab:Reference"] = get_property_value(psets, "Pset_ReinforcementBarPitchOfSlab", "Reference")
+    
+    # Pset_ReinforcementBarPitchOfWall
+    data["Pset_ReinforcementBarPitchOfWall:Reference"] = get_property_value(psets, "Pset_ReinforcementBarPitchOfWall", "Reference")
+    
+    # Pset_SlabCommon
+    data["Pset_SlabCommon:IsExternal"] = get_property_value(psets, "Pset_SlabCommon", "IsExternal")
+    data["Pset_SlabCommon:LoadBearing"] = get_property_value(psets, "Pset_SlabCommon", "LoadBearing")
+    data["Pset_SlabCommon:PitchAngle"] = get_property_value(psets, "Pset_SlabCommon", "PitchAngle")
+    data["Pset_SlabCommon:Reference"] = get_property_value(psets, "Pset_SlabCommon", "Reference")
+    data["Pset_SlabCommon:ThermalTransmittance"] = get_property_value(psets, "Pset_SlabCommon", "ThermalTransmittance")
+    
+    # Pset_StairFlightCommon
+    data["Pset_StairFlightCommon:IsExternal"] = get_property_value(psets, "Pset_StairFlightCommon", "IsExternal")
+    data["Pset_StairFlightCommon:LoadBearing"] = get_property_value(psets, "Pset_StairFlightCommon", "LoadBearing")
+    data["Pset_StairFlightCommon:Reference"] = get_property_value(psets, "Pset_StairFlightCommon", "Reference")
+    
+    # Pset_WallCommon
+    data["Pset_WallCommon:ExtendToStructure"] = get_property_value(psets, "Pset_WallCommon", "ExtendToStructure")
+    data["Pset_WallCommon:IsExternal"] = get_property_value(psets, "Pset_WallCommon", "IsExternal")
+    data["Pset_WallCommon:LoadBearing"] = get_property_value(psets, "Pset_WallCommon", "LoadBearing")
+    data["Pset_WallCommon:Reference"] = get_property_value(psets, "Pset_WallCommon", "Reference")
+    data["Pset_WallCommon:ThermalTransmittance"] = get_property_value(psets, "Pset_WallCommon", "ThermalTransmittance")
+    
+    # Qto_BeamBaseQuantities
+    data["Qto_BeamBaseQuantities:CrossSectionArea"] = get_property_value(psets, "Qto_BeamBaseQuantities", "CrossSectionArea")
+    data["Qto_BeamBaseQuantities:GrossSurfaceArea"] = get_property_value(psets, "Qto_BeamBaseQuantities", "GrossSurfaceArea")
+    data["Qto_BeamBaseQuantities:GrossVolume"] = get_property_value(psets, "Qto_BeamBaseQuantities", "GrossVolume")
+    data["Qto_BeamBaseQuantities:Length"] = get_property_value(psets, "Qto_BeamBaseQuantities", "Length")
+    data["Qto_BeamBaseQuantities:NetSurfaceArea"] = get_property_value(psets, "Qto_BeamBaseQuantities", "NetSurfaceArea")
+    data["Qto_BeamBaseQuantities:NetVolume"] = get_property_value(psets, "Qto_BeamBaseQuantities", "NetVolume")
+    data["Qto_BeamBaseQuantities:OuterSurfaceArea"] = get_property_value(psets, "Qto_BeamBaseQuantities", "OuterSurfaceArea")
+    
+    # Qto_ColumnBaseQuantities
+    data["Qto_ColumnBaseQuantities:CrossSectionArea"] = get_property_value(psets, "Qto_ColumnBaseQuantities", "CrossSectionArea")
+    data["Qto_ColumnBaseQuantities:GrossVolume"] = get_property_value(psets, "Qto_ColumnBaseQuantities", "GrossVolume")
+    data["Qto_ColumnBaseQuantities:Length"] = get_property_value(psets, "Qto_ColumnBaseQuantities", "Length")
+    data["Qto_ColumnBaseQuantities:NetVolume"] = get_property_value(psets, "Qto_ColumnBaseQuantities", "NetVolume")
+    data["Qto_ColumnBaseQuantities:OuterSurfaceArea"] = get_property_value(psets, "Qto_ColumnBaseQuantities", "OuterSurfaceArea")
+    
+    # Qto_MemberBaseQuantities
+    data["Qto_MemberBaseQuantities:CrossSectionArea"] = get_property_value(psets, "Qto_MemberBaseQuantities", "CrossSectionArea")
+    data["Qto_MemberBaseQuantities:GrossSurfaceArea"] = get_property_value(psets, "Qto_MemberBaseQuantities", "GrossSurfaceArea")
+    data["Qto_MemberBaseQuantities:GrossVolume"] = get_property_value(psets, "Qto_MemberBaseQuantities", "GrossVolume")
+    data["Qto_MemberBaseQuantities:Length"] = get_property_value(psets, "Qto_MemberBaseQuantities", "Length")
+    data["Qto_MemberBaseQuantities:NetSurfaceArea"] = get_property_value(psets, "Qto_MemberBaseQuantities", "NetSurfaceArea")
+    data["Qto_MemberBaseQuantities:NetVolume"] = get_property_value(psets, "Qto_MemberBaseQuantities", "NetVolume")
+    data["Qto_MemberBaseQuantities:OuterSurfaceArea"] = get_property_value(psets, "Qto_MemberBaseQuantities", "OuterSurfaceArea")
+    
+    # Qto_OpeningElementBaseQuantities
+    data["Qto_OpeningElementBaseQuantities:Area"] = get_property_value(psets, "Qto_OpeningElementBaseQuantities", "Area")
+    data["Qto_OpeningElementBaseQuantities:Depth"] = get_property_value(psets, "Qto_OpeningElementBaseQuantities", "Depth")
+    data["Qto_OpeningElementBaseQuantities:Height"] = get_property_value(psets, "Qto_OpeningElementBaseQuantities", "Height")
+    data["Qto_OpeningElementBaseQuantities:Width"] = get_property_value(psets, "Qto_OpeningElementBaseQuantities", "Width")
+    
+    # Qto_SlabBaseQuantities
+    data["Qto_SlabBaseQuantities:GrossArea"] = get_property_value(psets, "Qto_SlabBaseQuantities", "GrossArea")
+    data["Qto_SlabBaseQuantities:GrossVolume"] = get_property_value(psets, "Qto_SlabBaseQuantities", "GrossVolume")
+    data["Qto_SlabBaseQuantities:NetArea"] = get_property_value(psets, "Qto_SlabBaseQuantities", "NetArea")
+    data["Qto_SlabBaseQuantities:NetVolume"] = get_property_value(psets, "Qto_SlabBaseQuantities", "NetVolume")
+    data["Qto_SlabBaseQuantities:Perimeter"] = get_property_value(psets, "Qto_SlabBaseQuantities", "Perimeter")
+    data["Qto_SlabBaseQuantities:Width"] = get_property_value(psets, "Qto_SlabBaseQuantities", "Width")
+    
+    # Qto_StairFlightBaseQuantities
+    data["Qto_StairFlightBaseQuantities:GrossVolume"] = get_property_value(psets, "Qto_StairFlightBaseQuantities", "GrossVolume")
+    data["Qto_StairFlightBaseQuantities:Length"] = get_property_value(psets, "Qto_StairFlightBaseQuantities", "Length")
+    data["Qto_StairFlightBaseQuantities:NetVolume"] = get_property_value(psets, "Qto_StairFlightBaseQuantities", "NetVolume")
+    
+    # Qto_WallBaseQuantities
+    data["Qto_WallBaseQuantities:GrossSideArea"] = get_property_value(psets, "Qto_WallBaseQuantities", "GrossSideArea")
+    data["Qto_WallBaseQuantities:GrossVolume"] = get_property_value(psets, "Qto_WallBaseQuantities", "GrossVolume")
+    data["Qto_WallBaseQuantities:Height"] = get_property_value(psets, "Qto_WallBaseQuantities", "Height")
+    data["Qto_WallBaseQuantities:Length"] = get_property_value(psets, "Qto_WallBaseQuantities", "Length")
+    data["Qto_WallBaseQuantities:NetSideArea"] = get_property_value(psets, "Qto_WallBaseQuantities", "NetSideArea")
+    data["Qto_WallBaseQuantities:NetVolume"] = get_property_value(psets, "Qto_WallBaseQuantities", "NetVolume")
+    data["Qto_WallBaseQuantities:Width"] = get_property_value(psets, "Qto_WallBaseQuantities", "Width")
+    
+    # Storey
+    data["Storey"] = None
+    
+    # Type
+    data["Type:GlobalId"] = None
+    data["Type:Name"] = None
+    
+    return data
 
-    # Properties and quantities directly attached to element (IsDefinedBy)
-    if hasattr(element, 'IsDefinedBy'):
-        for rel in element.IsDefinedBy or []:
-            prop_def = getattr(rel, 'RelatingPropertyDefinition', None)
-            if not prop_def:
-                continue
 
-            if prop_def.is_a('IfcPropertySet'):
-                pset_name = getattr(prop_def, 'Name', 'Unknown')
-                for prop in prop_def.HasProperties or []:
-                    name = getattr(prop, 'Name', None)
-                    if name:
-                        key = f'{pset_name}:{name}'
-                        if key not in props:
-                            props[key] = get_property_value(prop)
-
-            elif prop_def.is_a('IfcElementQuantity'):
-                qty_name = getattr(prop_def, 'Name', 'Unknown')
-                for qty in prop_def.Quantities or []:
-                    name = getattr(qty, 'Name', None)
-                    if name:
-                        key = f'{qty_name}:{name}'
-                        if key not in props:
-                            props[key] = get_quantity_value(qty)
-
-    # Properties from element type (IsTypedBy)
-    if include_type_props and hasattr(element, 'IsTypedBy'):
-        for rel in element.IsTypedBy or []:
-            type_obj = getattr(rel, 'RelatingType', None)
-            if not type_obj:
-                continue
-
-            # Type attributes
-            type_attrs = ['GlobalId', 'Name', 'Description', 'ElementType']
-            for attr in type_attrs:
-                val = getattr(type_obj, attr, None)
-                if val is not None and f'Type:{attr}' not in props:
-                    props[f'Type:{attr}'] = val
-
-            # PropertySet and Quantity from type
-            if hasattr(type_obj, 'HasPropertySets'):
-                for ps in type_obj.HasPropertySets or []:
-                    if ps.is_a('IfcPropertySet'):
-                        pset_name = getattr(ps, 'Name', 'Unknown')
-                        for prop in ps.HasProperties or []:
-                            name = getattr(prop, 'Name', None)
-                            if name:
-                                key = f'{pset_name}:{name}'
-                                if key not in props:
-                                    props[key] = get_property_value(prop)
-                    elif ps.is_a('IfcElementQuantity'):
-                        qty_name = getattr(ps, 'Name', 'Unknown')
-                        for qty in ps.Quantities or []:
-                            name = getattr(qty, 'Name', None)
-                            if name:
-                                key = f'{qty_name}:{name}'
-                                if key not in props:
-                                    props[key] = get_quantity_value(qty)
-
-    return props
+def classify_element(element, name, psets=None):
+    """Классификация элемента по категории"""
+    ifc_type = element.is_a()
+    
+    if ifc_type == "IfcWall":
+        return "Стена"
+    elif ifc_type == "IfcColumn":
+        return "Колонна"
+    elif ifc_type == "IfcSlab":
+        predefined = getattr(element, 'PredefinedType', None)
+        if predefined and 'FOUNDATION' in str(predefined).upper():
+            return "Фундамент_Плита"
+        return "Перекрытие_Плита"
+    elif ifc_type == "IfcBeam":
+        return "Балка"
+    elif ifc_type == "IfcFooting":
+        return "Фундамент_Плита"
+    elif ifc_type == "IfcStairFlight":
+        return "Лестница_Марш"
+    elif ifc_type == "IfcStair":
+        return "Лестница_Площадка"
+    elif ifc_type == "IfcRamp":
+        return "Пандус"
+    elif ifc_type == "IfcPlate":
+        return "Перекрытие_Плита"
+    elif ifc_type == "IfcMember":
+        return "Элемент_каркаса"
+    elif ifc_type == "IfcFurnishingElement":
+        return "Мебель"
+    elif ifc_type == "IfcBuildingElementProxy":
+        return "Прочие_элементы"
+    elif ifc_type == "IfcOpeningElement":
+        return "Проем"
+    elif ifc_type == "IfcCurtainWall":
+        return "Навесная_стена"
+    elif ifc_type == "IfcWindow":
+        return "Окно"
+    elif ifc_type == "IfcDoor":
+        return "Дверь"
+    elif ifc_type == "IfcRoof":
+        return "Крыша"
+    elif ifc_type == "IfcPile":
+        return "Свая"
+    elif ifc_type == "IfcRailing":
+        return "Ограждение"
+    elif ifc_type == "IfcCovering":
+        return "Покрытие"
+    elif ifc_type == "IfcReinforcingMesh":
+        return "Арматурная_сетка"
+    elif ifc_type == "IfcBuildingStorey":
+        return "Этаж"
+    elif ifc_type == "IfcBuilding":
+        return "Здание"
+    else:
+        return "Прочее"
 
 
-# ----------------------------------------------------------------------
-# Model summary data collection
-# ----------------------------------------------------------------------
+def parse_concrete_properties(name, psets):
+    """Извлечение характеристик бетона"""
+    result = {
+        "material": "Не указан",
+        "class": None,
+        "frost": None,
+        "water": None,
+        "reinforced": False,
+        "type_detail": ""
+    }
+    
+    # Извлекаем материал из MGE_Material
+    for pset_name, props in psets.items():
+        if "MGE_Material" in props:
+            mat = props["MGE_Material"]
+            if mat and str(mat) != "0" and str(mat).strip():
+                result["material"] = str(mat).strip()
+                break
+    
+    # Извлекаем характеристики бетона
+    concrete_grade = None
+    freeze_durability = None
+    water_resist = None
+    
+    # Ищем в стандартных колонках MGE_*
+    for pset_name, props in psets.items():
+        if "MGE_ConcreteGrade" in props:
+            val = props["MGE_ConcreteGrade"]
+            if val and str(val) != "0" and str(val).strip():
+                concrete_grade = str(val).strip()
+        
+        if "MGE_FreezeDurability" in props:
+            val = props["MGE_FreezeDurability"]
+            if val and str(val) != "0" and str(val).strip():
+                freeze_durability = str(val).strip()
+        
+        if "MGE_WaterResist" in props:
+            val = props["MGE_WaterResist"]
+            if val and str(val) != "0" and str(val).strip():
+                water_resist = str(val).strip()
+    
+    # Если марки нет в стандартных колонках, пытаемся извлечь из названия
+    if not concrete_grade and name:
+        grade_match = re.search(r'\b([BВ]\d+(?:\.\d+)?)\b', name)
+        if grade_match:
+            concrete_grade = grade_match.group(1)
+            if concrete_grade.startswith('B') and not concrete_grade.startswith('В'):
+                concrete_grade = 'В' + concrete_grade[1:]
+    
+    result["class"] = concrete_grade
+    result["frost"] = freeze_durability
+    result["water"] = water_resist
+    
+    # Формируем detail-описание
+    parts = []
+    if concrete_grade:
+        parts.append(concrete_grade)
+    if freeze_durability:
+        parts.append(freeze_durability)
+    if water_resist:
+        parts.append(water_resist)
+    
+    if parts:
+        result["type_detail"] = " ".join(parts)
+    
+    return result
 
-def get_model_summary(ifc_file):
-    """Extract project info, stories, building height, address WITHOUT unit conversion."""
-    summary = {
-        'project_info': {},
-        'stories': [],
-        'stories_count': 0,
-        'building_height': None,
-        'address': 'N/A',
-        'buildings': []
+
+def extract_ifc_data(ifc_path):
+    """Основная функция извлечения данных из IFC"""
+    ifc_file = ifcopenshell.open(ifc_path)
+    unit_scale = get_unit_scale(ifc_file)
+
+    elements_data = []
+    all_elements = ifc_file.by_type("IfcProduct")
+
+    print(f"Всего элементов в файле: {len(all_elements)}")
+
+    for i, element in enumerate(all_elements):
+        if not element.Representation:
+            continue
+
+        name = element.Name if element.Name else "Без имени"
+        tag = element.Tag if element.Tag else ""
+        element_type = element.is_a()
+
+        psets = {}
+        try:
+            pset_definitions = ifcopenshell.util.element.get_psets(element)
+            for pset_name, props in pset_definitions.items():
+                psets[pset_name] = props
+        except:
+            pass
+
+        # Извлекаем все параметры согласно REQUIRED_COLUMNS
+        item = extract_element_properties(element, psets)
+
+        # Добавляем вычисляемые значения объема и площади
+        volume = 0.0
+        area = 0.0
+        shape = None
+
+        # Приоритет №1: Объем из свойств
+        found_volume_in_props = False
+        for pset_name, props in psets.items():
+            if "NetVolume" in props:
+                vol = props["NetVolume"]
+                if isinstance(vol, (int, float)):
+                    volume = vol
+                    found_volume_in_props = True
+                    break
+            if "GrossVolume" in props and not found_volume_in_props:
+                vol = props["GrossVolume"]
+                if isinstance(vol, (int, float)):
+                    if vol > 10000:
+                        volume = vol / 1000.0
+                    else:
+                        volume = vol
+                    found_volume_in_props = True
+                    break
+
+        # Если объема нет в свойствах, пробуем рассчитать по геометрии
+        if not found_volume_in_props:
+            try:
+                settings = ifcopenshell.geom.settings()
+                settings.set(settings.USE_PYTHON_OPENCASCADE, True)
+                shape = ifcopenshell.geom.create_shape(settings, element)
+                if shape:
+                    volume = calculate_volume_by_geometry(shape, unit_scale)
+            except Exception as e:
+                pass
+
+        # Расчет площади
+        try:
+            if shape:
+                area = calculate_area_by_geometry(shape, unit_scale)
+            else:
+                settings = ifcopenshell.geom.settings()
+                settings.set(settings.USE_PYTHON_OPENCASCADE, True)
+                shape = ifcopenshell.geom.create_shape(settings, element)
+                if shape:
+                    area = calculate_area_by_geometry(shape, unit_scale)
+        except:
+            pass
+
+        # Добавляем volume и area в item
+        item["volume_m3"] = round(volume, 4)
+        item["area_m2"] = round(area, 4)
+
+        # Классификация и материал
+        category = classify_element(element, name, psets)
+        material_props = parse_concrete_properties(name, psets)
+
+        item["category"] = category
+        item["material"] = material_props["material"]
+        item["concrete_class"] = material_props["class"]
+        item["frost_resistance"] = material_props["frost"]
+        item["water_permeability"] = material_props["water"]
+        item["is_reinforced"] = material_props["reinforced"]
+        item["material_detail"] = material_props["type_detail"]
+
+        elements_data.append(item)
+
+        if (i + 1) % 500 == 0:
+            print(f"Обработано {i + 1} элементов...")
+
+    return elements_data
+
+
+def get_russian_type_name(category, ifc_type):
+    """Получение русского названия типа элемента"""
+    type_mapping = {
+        "Балка": "Балки",
+        "Колонна": "Колонны",
+        "Стена": "Стены",
+        "Перекрытие_Плита": "Перекрытия",
+        "Фундамент_Плита": "Фундаментные_плиты",
+        "Фундамент_Подготовка_Бетон": "Подготовка_фундамента",
+        "Фундамент_Подготовка_Песок": "Подготовка_фундамента",
+        "Фундамент_Подготовка_Щебень": "Подготовка_фундамента",
+        "Лестница_Марш": "Лестничные_марши",
+        "Лестница_Площадка": "Лестничные_площадки",
+        "Пандус": "Пандусы",
     }
 
-    # Project
-    projects = ifc_file.by_type('IfcProject')
-    if projects:
-        p = projects[0]
-        summary['project_info'] = {
-            'Name': p.Name or 'N/A',
-            'Description': p.Description or 'N/A',
-            'LongName': p.LongName or 'N/A',
-            'Phase': p.Phase or 'N/A',
-            'Schema': ifc_file.schema
-        }
-        if p.OwnerHistory:
-            oh = p.OwnerHistory
-            ts = getattr(oh, 'CreationDate', None) or getattr(oh, 'CreationTime', None)
-            if ts:
-                summary['project_info']['CreationDate'] = datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
+    # Сначала пробуем по категории
+    if category in type_mapping:
+        return type_mapping[category]
 
-    # Stories
-    stories = ifc_file.by_type('IfcBuildingStorey')
-    summary['stories_count'] = len(stories)
-    summary['stories'] = [
-        {'Name': s.Name or 'N/A', 'Elevation': s.Elevation if s.Elevation is not None else 0}
-        for s in stories
+    # Затем по IFC типу
+    ifc_type_mapping = {
+        "IfcBeam": "Балки",
+        "IfcColumn": "Колонны",
+        "IfcWall": "Стены",
+        "IfcSlab": "Перекрытия",
+        "IfcFooting": "Фундаментные_плиты",
+        "IfcStairFlight": "Лестничные_марши",
+        "IfcStair": "Лестницы",
+        "IfcRamp": "Пандусы",
+        "IfcPlate": "Плиты",
+        "IfcMember": "Элементы_каркаса",
+        "IfcFurnishingElement": "Мебель",
+        "IfcBuildingElementProxy": "Прочие_элементы",
+        "IfcOpeningElement": "Проемы",
+        "IfcCurtainWall": "Навесные_стены",
+        "IfcWindow": "Окна",
+        "IfcDoor": "Двери",
+        "IfcRoof": "Крыши",
+        "IfcPile": "Сваи",
+        "IfcRailing": "Ограждения",
+        "IfcCovering": "Покрытия",
+        "IfcReinforcingMesh": "Арматурные_сетки",
+        "IfcBuildingStorey": "Этажи",
+        "IfcBuilding": "Здание",
+    }
+
+    if ifc_type in ifc_type_mapping:
+        return ifc_type_mapping[ifc_type]
+
+    return "Прочие"
+
+
+def format_material_string(material_props):
+    """Формирование строки материала с характеристиками"""
+    if not material_props:
+        return "-"
+    
+    material = material_props.get("material", "")
+    concrete_class = material_props.get("class", "")
+    frost = material_props.get("frost", "")
+    water = material_props.get("water", "")
+    type_detail = material_props.get("type_detail", "")
+    
+    # Если есть detail-описание (класс бетона + характеристики), используем его
+    if type_detail:
+        # Проверяем, является ли материал бетоном
+        if material and ('бетон' in material.lower() or 'раствор' in material.lower()):
+            return f"{material} {type_detail}".strip()
+        else:
+            # Для небетонных материалов просто возвращаем название
+            return material if material else "-"
+    
+    # Если нет detail, но есть материал
+    if material and material != "Не указан":
+        return material
+    
+    return "-"
+
+
+def create_summary_table(data):
+    """Создание сводной таблицы в требуемом формате"""
+    df = pd.DataFrame(data)
+
+    # Список IFC классов для исключения (неинформативные элементы)
+    excluded_ifc_classes = [
+        "IfcDiscreteAccessory",
+        "IfcElementAssembly",
+        "IfcOpeningElement",
+        "IfcBuildingElementProxy"
     ]
 
-    # Building height (difference between highest and lowest story) - NO unit conversion
-    if stories:
-        elevations = [s.Elevation for s in stories if s.Elevation is not None]
-        if elevations:
-            summary['building_height'] = max(elevations) - min(elevations)
+    # Фильтрация по IFC классам
+    df = df[~df["Ifc Class"].isin(excluded_ifc_classes)]
 
-    # Buildings and address
-    buildings = ifc_file.by_type('IfcBuilding')
-    for b in buildings:
-        summary['buildings'].append({
-            'Name': b.Name or 'N/A',
-            'LongName': b.LongName or 'N/A'
-        })
+    # Добавляем колонку с русским названием типа
+    df["Тип (RU)"] = df.apply(
+        lambda row: get_russian_type_name(row.get("category", ""), row.get("Ifc Class", "")),
+        axis=1
+    )
 
-    sites = ifc_file.by_type('IfcSite')
-    if sites and sites[0].LongName:
-        summary['address'] = sites[0].LongName
-    elif buildings and buildings[0].LongName:
-        summary['address'] = buildings[0].LongName
+    # Добавляем колонку с полным описанием материала
+    df["Материал_полный"] = df.apply(
+        lambda row: format_material_string({
+            "material": row.get("material", ""),
+            "class": row.get("concrete_class", ""),
+            "frost": row.get("frost_resistance", ""),
+            "water": row.get("water_permeability", ""),
+            "type_detail": row.get("material_detail", "")
+        }),
+        axis=1
+    )
+
+    # Фильтрация строк с неинформативными материалами
+    def is_informative_material(row):
+        material_full = row["Материал_полный"]
+        concrete_class = row.get("concrete_class", "")
+        material_detail = row.get("material_detail", "")
+        ifc_class = row.get("Ifc Class", "")
+
+        # ИСКЛЮЧЕНИЕ: Лестницы и лестничные марши всегда включаем в таблицу
+        if ifc_class in ["IfcStair", "IfcStairFlight"]:
+            return True
+
+        # Если есть detail-описание - это информативно
+        if material_detail:
+            return True
+
+        # Если есть класс бетона (В25, В30, В7.5 и т.п.) - это информативно
+        if concrete_class and re.search(r'В\d+\.?\d*', concrete_class):
+            return True
+
+        # Если материал содержит конкретное название (не просто "Бетон")
+        if material_full and material_full != "-" and len(material_full.split()) > 1:
+            return True
+
+        return False
+
+    df = df[df.apply(is_informative_material, axis=1)]
+
+    # Группировка по типу, IFC классу и материалу
+    group_cols = ["Тип (RU)", "Ifc Class", "Материал_полный"]
+
+    summary = df.groupby(group_cols, dropna=False).agg(
+        count=("id" if "id" in df.columns else "Element Specific:GlobalId", "count"),
+        total_volume_m3=("volume_m3", "sum"),
+        total_area_m2=("area_m2", "sum")
+    ).reset_index()
+
+    # Переименовываем колонки в соответствии с требуемым форматом
+    summary = summary.rename(columns={
+        "Ifc Class": "Тип элемента",
+        "Материал_полный": "Материал",
+        "count": "Количество, шт",
+        "total_volume_m3": "Объем, м³"
+    })
+
+    # Форматирование числовых значений
+    summary["Объем, м³"] = summary["Объем, м³"].apply(lambda x: round(x, 3) if pd.notna(x) and x != 0 else None)
+
+    # Замена None на "-" для отображения
+    summary["Объем, м³"] = summary["Объем, м³"].fillna("-")
+
+    # Сортировка
+    summary = summary.sort_values(by=["Тип (RU)", "Тип элемента", "Материал"], ascending=[True, True, True])
+
+    # Выбираем только нужные колонки в правильном порядке (без Площади)
+    summary = summary[["Тип (RU)", "Тип элемента", "Материал", "Количество, шт", "Объем, м³"]]
 
     return summary
 
 
-# ----------------------------------------------------------------------
-# Main parsing and Excel generation function
-# ----------------------------------------------------------------------
-
-def parse_ifc_to_excel(ifc_path, output_excel_path):
-    """Main entry point: reads IFC and saves Excel report with two sheets: Сводка and Элементы.
+def create_summary_excel(items, output_path):
+    """Создание Excel файла со сводной таблицей"""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Материалы"
     
-    The 'Элементы' sheet has the following format:
-    - Columns: "Element Specific:Long Name", "Element Specific:Name", "Ifc Class", 
-               "Storey", and "PSetName:PropertyName" for all properties.
-    - Rows: One row per element (IfcElement, IfcBuilding, IfcBuildingStorey)
-    - Values are placed in the corresponding column based on the property key.
-    """
-    print(f"Opening IFC: {ifc_path}")
-    ifc_file = ifcopenshell.open(ifc_path)
-
-    # 1. Summary data
-    summary = get_model_summary(ifc_file)
-
-    # 2. Collect all elements: IfcElement + IfcBuilding + IfcBuildingStorey
-    elements = ifc_file.by_type('IfcElement')
-    buildings = ifc_file.by_type('IfcBuilding')
-    storeys = ifc_file.by_type('IfcBuildingStorey')
+    # Заголовки
+    headers = ["Тип (RU)", "Тип элемента", "Материал", "Количество, шт", "Объем, м³"]
     
-    print(f"Found IfcElement: {len(elements)}, IfcBuilding: {len(buildings)}, IfcBuildingStorey: {len(storeys)}")
-
-    all_elements_data = []
-    all_keys = set()
-
-    # Process IfcBuilding elements first (they appear at top level in user's example)
-    for i, elem in enumerate(buildings):
-        elem_props = get_element_properties(elem, ifc_file, include_type_props=True)
-        all_elements_data.append(elem_props)
-        all_keys.update(elem_props.keys())
-
-    # Process IfcBuildingStorey elements second
-    for i, elem in enumerate(storeys):
-        elem_props = get_element_properties(elem, ifc_file, include_type_props=True)
-        all_elements_data.append(elem_props)
-        all_keys.update(elem_props.keys())
-
-    # Process all other IfcElement elements
-    for i, elem in enumerate(elements):
-        if i % 500 == 0:
-            print(f"Processing IfcElement {i} / {len(elements)}")
-        elem_props = get_element_properties(elem, ifc_file, include_type_props=True)
-        all_elements_data.append(elem_props)
-        all_keys.update(elem_props.keys())
-
-    all_keys = sorted(all_keys)
-    print(f"Unique parameters: {len(all_keys)}")
-
-    # 3. Create Excel workbook
-    wb = openpyxl.Workbook()
-    ws_summary = wb.active
-    ws_summary.title = "Сводка"
-
-    # Styles
+    # Стили
     header_font = Font(bold=True, color="FFFFFF")
     header_fill = PatternFill(start_color="2c3e50", end_color="2c3e50", fill_type="solid")
     header_alignment = Alignment(horizontal="center", vertical="center")
@@ -300,63 +1002,27 @@ def parse_ifc_to_excel(ifc_path, output_excel_path):
         left=Side(style='thin'), right=Side(style='thin'),
         top=Side(style='thin'), bottom=Side(style='thin')
     )
-
-    # ---- Sheet "Сводка" ----
-    ws_summary.cell(row=1, column=1, value="Параметр").font = header_font
-    ws_summary.cell(row=1, column=1).fill = header_fill
-    ws_summary.cell(row=1, column=2, value="Значение").font = header_font
-    ws_summary.cell(row=1, column=2).fill = header_fill
-
-    row = 2
-    for k, v in summary['project_info'].items():
-        ws_summary.cell(row=row, column=1, value=k).border = thin_border
-        ws_summary.cell(row=row, column=2, value=v).border = thin_border
-        row += 1
-
-    ws_summary.cell(row=row, column=1, value="Количество этажей").border = thin_border
-    ws_summary.cell(row=row, column=2, value=summary['stories_count']).border = thin_border
-    row += 1
-
-    ws_summary.cell(row=row, column=1, value="Высота здания").border = thin_border
-    ws_summary.cell(row=row, column=2, value=summary['building_height'] or 'N/A').border = thin_border
-    row += 1
-
-    ws_summary.cell(row=row, column=1, value="Адрес").border = thin_border
-    ws_summary.cell(row=row, column=2, value=summary['address']).border = thin_border
-    row += 1
-
-    ws_summary.cell(row=row, column=1, value="Всего элементов (IfcElement)").border = thin_border
-    ws_summary.cell(row=row, column=2, value=len(elements)).border = thin_border
-    row += 1
-
-    if summary['stories']:
-        ws_summary.cell(row=row, column=1, value="Список этажей (отметка)").border = thin_border
-        row += 1
-        for s in summary['stories']:
-            ws_summary.cell(row=row, column=1, value=f"  {s['Name']}").border = thin_border
-            ws_summary.cell(row=row, column=2, value=s['Elevation']).border = thin_border
-            row += 1
-
-    ws_summary.column_dimensions['A'].width = 35
-    ws_summary.column_dimensions['B'].width = 50
-
-    # ---- Sheet "Элементы" ----
-    ws_elements = wb.create_sheet("Элементы")
-    for col_idx, key in enumerate(all_keys, 1):
-        cell = ws_elements.cell(row=1, column=col_idx, value=key)
+    
+    # Записываем заголовки
+    for col_idx, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col_idx, value=header)
         cell.font = header_font
         cell.fill = header_fill
         cell.alignment = header_alignment
         cell.border = thin_border
-
-    for row_idx, elem_props in enumerate(all_elements_data, 2):
-        for col_idx, key in enumerate(all_keys, 1):
-            val = elem_props.get(key)
-            if val is not None:
-                ws_elements.cell(row=row_idx, column=col_idx, value=val).border = thin_border
-
-    # Auto-width columns (max 50 chars)
-    for col in ws_elements.columns:
+    
+    # Записываем данные
+    for row_idx, item in enumerate(items, 2):
+        ws.cell(row=row_idx, column=1, value=item.get("Тип (RU)", "")).border = thin_border
+        ws.cell(row=row_idx, column=2, value=item.get("Тип элемента", "")).border = thin_border
+        ws.cell(row=row_idx, column=3, value=item.get("Материал", "")).border = thin_border
+        ws.cell(row=row_idx, column=4, value=item.get("Количество, шт", 0)).border = thin_border
+        
+        vol = item.get("Объем, м³", "-")
+        ws.cell(row=row_idx, column=5, value=vol).border = thin_border
+    
+    # Авто-ширина колонок
+    for col in ws.columns:
         max_len = 0
         col_letter = col[0].column_letter
         for cell in col:
@@ -365,72 +1031,94 @@ def parse_ifc_to_excel(ifc_path, output_excel_path):
                     max_len = max(max_len, len(str(cell.value)))
                 except:
                     pass
-        ws_elements.column_dimensions[col_letter].width = min(max_len + 2, 50)
+        ws.column_dimensions[col_letter].width = min(max_len + 2, 50)
+    
+    wb.save(output_path)
+    print(f"✅ Сводная таблица сохранена: {output_path}")
 
-    wb.save(output_excel_path)
-    print(f"Excel saved: {output_excel_path}")
-
-
-# ----------------------------------------------------------------------
-# Entry point for ifc_inspect service
-# ----------------------------------------------------------------------
 
 def parse_ifc_file(ifc_path, output_folder):
     """
-    Main function for ifc_inspect service.
-    Parses IFC file and generates Excel report with two sheets: Сводка and Элементы.
-    NO unit conversion, NO opening subtraction.
+    Основная функция для сервиса ifc_inspect.
+    Работает внутри папки сессии.
+    
+    Очередность:
+    1. Извлекаем данные из IFC (extract_ifc_data)
+    2. Создаем сводную таблицу (create_summary_table)
+    3. Сохраняем только materials_summary.xlsx
     
     Args:
         ifc_path: Path to IFC file
-        output_folder: Folder to save Excel report
+        output_folder: Folder to save results (session folder)
         
     Returns:
-        Dict with parsing results and path to Excel file
+        Dict with parsing results
     """
-    print(f"Parsing IFC file: {ifc_path}")
-    ifc_file = ifcopenshell.open(ifc_path)
+    print(f"\n{'='*60}")
+    print("📊 ОБРАБОТКА IFC МОДЕЛИ")
+    print(f"{'='*60}")
+    print(f"IFC файл: {os.path.basename(ifc_path)}")
+    print(f"Папка сессии: {output_folder}")
     
-    # Get summary data
-    summary = get_model_summary(ifc_file)
+    # Шаг 1: Извлечение данных из IFC
+    print("\n📋 Шаг 1: Извлечение данных из IFC...")
+    data = extract_ifc_data(ifc_path)
+    print(f"   ✅ Извлечено {len(data)} элементов")
     
-    # Collect all elements
-    elements = ifc_file.by_type('IfcElement')
+    # Шаг 2: Создание сводной таблицы
+    print("\n📊 Шаг 2: Создание сводной таблицы...")
+    summary_df = create_summary_table(data)
+    items = summary_df.to_dict('records')
+    print(f"   ✅ Сформировано {len(items)} строк в сводной таблице")
     
-    # Generate Excel report
-    excel_filename = "ifc_report.xlsx"
-    excel_path = os.path.join(output_folder, excel_filename)
-    parse_ifc_to_excel(ifc_path, excel_path)
+    # Шаг 3: Сохранение результата
+    output_path = Path(output_folder) / "materials_summary.xlsx"
+    create_summary_excel(items, str(output_path))
     
-    # Prepare summary
-    elements_summary = {}
-    for elem_type in set(e.is_a() for e in elements):
-        count = len([e for e in elements if e.is_a() == elem_type])
-        elements_summary[elem_type] = count
+    # Сохраняем JSON для машинной обработки
+    json_path = Path(output_folder) / "materials_summary.json"
+    with open(json_path, 'w', encoding='utf-8') as f:
+        json.dump({
+            'success': True,
+            'source_file': os.path.basename(ifc_path),
+            'total_items': len(items),
+            'output_excel': 'materials_summary.xlsx',
+            'items': items
+        }, f, ensure_ascii=False, indent=2)
+    
+    # Подсчет статистики
+    total_count = sum(item.get("Количество, шт", 0) for item in items if isinstance(item.get("Количество, шт"), (int, float)))
+    total_volume = sum(float(item.get("Объем, м³", 0)) for item in items if item.get("Объем, м³") != "-" and isinstance(item.get("Объем, м³"), (int, float)))
     
     result = {
         'success': True,
-        'excel_path': excel_path,
-        'excel_filename': excel_filename,
-        'project_info': summary['project_info'],
-        'elements_count': elements_summary,
-        'total_elements': len(elements),
-        'materials_count': 0,  # Not tracked in this version
-        'stories_count': summary['stories_count']
+        'excel_path': str(output_path),
+        'excel_filename': 'materials_summary.xlsx',
+        'json_path': str(json_path),
+        'total_elements': len(data),
+        'aggregated_materials': len(items),
+        'total_count': total_count,
+        'total_volume': round(total_volume, 3)
     }
     
-    print(f"✅ IFC parsing complete. Total elements: {result['total_elements']}")
+    print(f"\n💾 Результаты сохранены в: {output_folder}")
+    print(f"   • materials_summary.xlsx - сводная таблица")
+    print(f"   • materials_summary.json - данные для обработки")
+    print(f"\n✅ Обработка IFC завершена. Всего элементов: {len(data)}, Уникальных материалов: {len(items)}")
+    
     return result
 
 
-# ----------------------------------------------------------------------
-# Script entry point when run directly
-# ----------------------------------------------------------------------
+# Entry point when run directly
 if __name__ == "__main__":
     import sys
+    
     if len(sys.argv) < 2:
-        print("Usage: python ifc_parser.py <path_to_IFC> [path_to_output_XLSX]")
+        print("Использование: python ifc_parser.py <path_to_IFC> [output_folder]")
+        print("Пример: python ifc_parser.py /workspace/data/model.ifc /workspace/uploads/session_id")
         sys.exit(1)
+    
     ifc_file = sys.argv[1]
-    out_file = sys.argv[2] if len(sys.argv) > 2 else "ifc_parser_output.xlsx"
-    parse_ifc_to_excel(ifc_file, out_file)
+    output_folder = sys.argv[2] if len(sys.argv) > 2 else "."
+    
+    parse_ifc_file(ifc_file, output_folder)
