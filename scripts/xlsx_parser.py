@@ -1,17 +1,14 @@
 #!/usr/bin/env python3
 """
-Скрипт парсинга Excel файлов отчетов IFC (ifc_report.xlsx).
-Создает сводную таблицу по типам элементов, материалам с количеством, объемом и площадью.
+Скрипт парсинга IFC файлов.
+Создает сводную таблицу по типам элементов, материалам с количеством и объемом.
 Для несущих элементов из монолитного железобетона (стены, перекрытия, колонны, фундаменты)
 извлекает характеристики материала: класс бетона, морозостойкость, водонепроницаемость.
 
-Формат выходной таблицы:
-Тип (RU) | Тип элемента | Материал (с характеристиками: Бетон В30 F150 W6) | Количество, шт | Объем, м³ | Площадь, м²
+Использует прямое чтение IFC через ifcopenshell (логика из extract.py).
 
-Характеристики бетона извлекаются:
-1. Из названий колонок Qto_*:Бетон В30 F150 W8 (формат файла 1)
-2. Из отдельных колонок ExpCheck_MaterialConcrete:MGE_ConcreteGrade/FreezeDurability/WaterResist (формат файла 2)
-3. Из Element Specific:Name или ObjectType (резервный вариант)
+Формат выходной таблицы:
+Тип (RU) | Тип элемента | Материал (с характеристиками: Бетон В30 F150 W6) | Количество, шт | Объем, м³
 """
 
 import os
@@ -23,6 +20,9 @@ from collections import defaultdict
 import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+import ifcopenshell
+import ifcopenshell.util.element
+import ifcopenshell.util.unit
 
 
 # Несущие элементы из монолитного железобетона
@@ -60,9 +60,48 @@ IFC_TYPE_RU_MAPPING = {
 }
 
 
-def get_type_ru(ifc_class: str) -> str:
-    """Получает русское название типа элемента по IFC классу."""
-    return IFC_TYPE_RU_MAPPING.get(ifc_class, 'Прочие_элементы')
+def get_unit_scale(ifc_file):
+    """Получить масштаб единиц из IFC файла"""
+    try:
+        units = ifcopenshell.util.unit.get_unit_scale(ifc_file)
+        return units
+    except:
+        return 1.0
+
+
+def calculate_volume_by_geometry(shape, unit_scale):
+    """Расчет объема через bounding box с учетом масштаба"""
+    try:
+        bbox_min = shape.bounding_box.lower_corner
+        bbox_max = shape.bounding_box.upper_corner
+        
+        dx = (bbox_max[0] - bbox_min[0]) * unit_scale
+        dy = (bbox_max[1] - bbox_min[1]) * unit_scale
+        dz = (bbox_max[2] - bbox_min[2]) * unit_scale
+        
+        return abs(dx * dy * dz)
+    except Exception as e:
+        return 0.0
+
+
+def calculate_area_by_geometry(shape, unit_scale):
+    """Расчет площади поверхности через геометрию"""
+    try:
+        area = shape.geometry.surface_area
+        return area * (unit_scale ** 2)
+    except Exception as e:
+        return 0.0
+
+
+def get_property_value(psets, pset_name, prop_name):
+    """Получить значение свойства из psets"""
+    if pset_name in psets:
+        props = psets[pset_name]
+        if prop_name in props:
+            val = props[prop_name]
+            if val is not None and prop_name != 'id':
+                return val
+    return None
 
 
 def find_ifc_report_file(session_folder: str) -> Optional[str]:
