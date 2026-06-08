@@ -1051,6 +1051,155 @@ def create_summary_excel(items, output_path):
     print(f"✅ Сводная таблица сохранена: {output_path}")
 
 
+def create_full_elements_excel(data, output_path):
+    """Создание Excel файла с полным списком элементов и их параметрами"""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Все элементы"
+    
+    # Основные колонки согласно требованиям
+    main_headers = [
+        "Наименование",
+        "Код IFC",
+        "Подземный/Надземный",
+        "Ширина, м",
+        "Высота, м",
+        "Длина, м",
+        "Толщина, м",
+        "Объем, м³",
+        "Площадь, м²",
+        "Материал",
+        "Характеристики материала"
+    ]
+    
+    # Добавляем все остальные колонки из REQUIRED_COLUMNS
+    all_headers = main_headers + [col for col in REQUIRED_COLUMNS if col not in main_headers]
+    
+    # Стили
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="2c3e50", end_color="2c3e50", fill_type="solid")
+    header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    thin_border = Border(
+        left=Side(style='thin'), right=Side(style='thin'),
+        top=Side(style='thin'), bottom=Side(style='thin')
+    )
+    
+    # Записываем заголовки
+    for col_idx, header in enumerate(all_headers, 1):
+        cell = ws.cell(row=1, column=col_idx, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_alignment
+        cell.border = thin_border
+    
+    # Записываем данные
+    for row_idx, item in enumerate(data, 2):
+        # Наименование
+        name = item.get("Element Specific:Name") or item.get("Element Specific:LongName") or ""
+        ws.cell(row=row_idx, column=1, value=name).border = thin_border
+        
+        # Код IFC
+        ifc_code = item.get("ExpCheck_Beam:MGE_ElementCode") or \
+                   item.get("ExpCheck_Column:MGE_ElementCode") or \
+                   item.get("ExpCheck_Slab:MGE_ElementCode") or \
+                   item.get("ExpCheck_Wall:MGE_ElementCode") or \
+                   item.get("ExpCheck_Ramp:MGE_ElementCode") or \
+                   item.get("ExpCheck_StairFlight:MGE_ElementCode") or ""
+        ws.cell(row=row_idx, column=2, value=ifc_code).border = thin_border
+        
+        # Подземный/Надземный
+        above_ground = item.get("Pset_BuildingStoreyCommon:AboveGround")
+        storey_elevation = None
+        # Пытаемся определить по этажу
+        if hasattr(item.get("Storey"), 'Elevation'):
+            storey_elevation = item["Storey"].Elevation
+        elif isinstance(item.get("Storey"), (int, float)):
+            storey_elevation = item["Storey"]
+        
+        if storey_elevation is not None:
+            underground_status = "Подземный" if storey_elevation < 0 else "Надземный"
+        elif above_ground is not None:
+            underground_status = "Надземный" if above_ground else "Подземный"
+        else:
+            underground_status = "Не определено"
+        ws.cell(row=row_idx, column=3, value=underground_status).border = thin_border
+        
+        # Размеры (извлекаем из Qto quantities)
+        width = item.get("Qto_OpeningElementBaseQuantities:Width") or \
+                item.get("Qto_SlabBaseQuantities:Width") or \
+                item.get("Qto_WallBaseQuantities:Width") or ""
+        height = item.get("Qto_OpeningElementBaseQuantities:Height") or \
+                 item.get("Qto_WallBaseQuantities:Height") or ""
+        length = item.get("Qto_BeamBaseQuantities:Length") or \
+                 item.get("Qto_ColumnBaseQuantities:Length") or \
+                 item.get("Qto_MemberBaseQuantities:Length") or \
+                 item.get("Qto_SlabBaseQuantities:Width") or \
+                 item.get("Qto_WallBaseQuantities:Length") or ""
+        thickness = item.get("Qto_WallBaseQuantities:Width") or \
+                    item.get("Qto_SlabBaseQuantities:Width") or ""
+        
+        ws.cell(row=row_idx, column=4, value=width).border = thin_border
+        ws.cell(row=row_idx, column=5, value=height).border = thin_border
+        ws.cell(row=row_idx, column=6, value=length).border = thin_border
+        ws.cell(row=row_idx, column=7, value=thickness).border = thin_border
+        
+        # Объем и площадь
+        ws.cell(row=row_idx, column=8, value=item.get("volume_m3", "")).border = thin_border
+        ws.cell(row=row_idx, column=9, value=item.get("area_m2", "")).border = thin_border
+        
+        # Материал
+        material = item.get("material", "")
+        concrete_class = item.get("concrete_class", "")
+        frost = item.get("frost_resistance", "")
+        water = item.get("water_permeability", "")
+        
+        material_parts = [material] if material else []
+        if concrete_class:
+            material_parts.append(concrete_class)
+        if frost:
+            material_parts.append(frost)
+        if water:
+            material_parts.append(water)
+        
+        material_str = " ".join(material_parts) if material_parts else ""
+        ws.cell(row=row_idx, column=10, value=material_str).border = thin_border
+        
+        # Характеристики материала (полное описание)
+        material_detail = item.get("material_detail", "")
+        char_parts = []
+        if concrete_class:
+            char_parts.append(f"Класс бетона: {concrete_class}")
+        if frost:
+            char_parts.append(f"Морозостойкость: {frost}")
+        if water:
+            char_parts.append(f"Водонепроницаемость: {water}")
+        if material_detail:
+            char_parts.append(f"Тип: {material_detail}")
+        
+        char_str = "; ".join(char_parts) if char_parts else ""
+        ws.cell(row=row_idx, column=11, value=char_str).border = thin_border
+        
+        # Остальные колонки из REQUIRED_COLUMNS
+        for col_idx, header in enumerate(all_headers[11:], 12):
+            value = item.get(header, "")
+            ws.cell(row=row_idx, column=col_idx + 11, value=value).border = thin_border
+    
+    # Авто-ширина колонок
+    for col in ws.columns:
+        max_len = 0
+        col_letter = col[0].column_letter
+        for cell in col:
+            if cell.value:
+                try:
+                    max_len = max(max_len, len(str(cell.value)))
+                except:
+                    pass
+        ws.column_dimensions[col_letter].width = min(max_len + 2, 50)
+    
+    wb.save(output_path)
+    print(f"✅ Полный список элементов сохранен: {output_path}")
+
+
 def extract_building_info(ifc_file):
     """
     Извлечь информацию об объекте строительства из открытого IFC файла.
@@ -1220,7 +1369,9 @@ def parse_ifc_file(ifc_path, output_folder):
     Очередность:
     1. Извлекаем данные из IFC (extract_ifc_data)
     2. Создаем сводную таблицу (create_summary_table)
-    3. Сохраняем только materials_summary.xlsx
+    3. Создаем полный список элементов (full_elements.xlsx)
+    4. Извлекаем высоту здания и сохраняем в height.txt
+    5. Сохраняем только materials_summary.xlsx
     
     Args:
         ifc_path: Path to IFC file
@@ -1240,8 +1391,9 @@ def parse_ifc_file(ifc_path, output_folder):
     data = extract_ifc_data(ifc_path)
     print(f"   ✅ Извлечено {len(data)} элементов")
     
-    # Шаг 1.5: Извлечение информации о здании (удалено, так как не используется в UI)
-    building_info = None
+    # Шаг 1.5: Извлечение информации о здании
+    ifc_file = ifcopenshell.open(ifc_path)
+    building_info = extract_building_info(ifc_file)
     
     # Шаг 2: Создание сводной таблицы
     print("\n📊 Шаг 2: Создание сводной таблицы...")
@@ -1249,7 +1401,24 @@ def parse_ifc_file(ifc_path, output_folder):
     items = summary_df.to_dict('records')
     print(f"   ✅ Сформировано {len(items)} строк в сводной таблице")
     
-    # Шаг 3: Сохранение результата
+    # Шаг 3: Сохранение полного списка элементов
+    print("\n📋 Шаг 3: Сохранение полного списка элементов...")
+    full_elements_path = Path(output_folder) / "full_elements.xlsx"
+    create_full_elements_excel(data, str(full_elements_path))
+    
+    # Шаг 4: Сохранение высоты здания
+    print("\n📏 Шаг 4: Сохранение высоты здания...")
+    height_m = building_info.get("summary", {}).get("total_height_from_zero_m")
+    if height_m is not None:
+        height_path = Path(output_folder) / "height.txt"
+        with open(height_path, 'w', encoding='utf-8') as f:
+            f.write(str(height_m))
+        print(f"   ✅ Высота здания: {height_m} м (сохранено в height.txt)")
+    else:
+        print("   ⚠️ Не удалось определить высоту здания")
+        height_m = None
+    
+    # Шаг 5: Сохранение результирующей сводной таблицы
     output_path = Path(output_folder) / "materials_summary.xlsx"
     create_summary_excel(items, str(output_path))
     
@@ -1278,9 +1447,16 @@ def parse_ifc_file(ifc_path, output_folder):
     }
     
     print(f"\n💾 Результаты сохранены в: {output_folder}")
+    print(f"   • full_elements.xlsx - полный список элементов")
+    print(f"   • height.txt - высота здания")
     print(f"   • materials_summary.xlsx - сводная таблица")
     print(f"   • materials_summary.json - данные для обработки")
     print(f"\n✅ Обработка IFC завершена. Всего элементов: {len(data)}, Уникальных материалов: {len(items)}")
+    
+    # Добавляем информацию о высоте и полном списке элементов в результат
+    result['height_m'] = height_m
+    result['full_elements_file'] = 'full_elements.xlsx'
+    result['height_file'] = 'height.txt'
     
     return result
 
