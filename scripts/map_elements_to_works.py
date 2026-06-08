@@ -1,477 +1,877 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-Скрипт для маппинга таблицы элементов (full_elements.xlsx) с таблицей перечня работ (Перечень работ КР_new.xlsx).
+Скрипт для подбора видов работ к элементам из таблицы full_elements.xlsx
+на основе таблицы Перечень работ КР_new.xlsx (версия 2)
 
-Логика работы:
-1. Читает full_elements.xlsx из папки сессии - таблица с элементами IFC модели
-2. Читает Перечень работ КР_new.xlsx из папки сессии - отфильтрованный перечень работ
-3. Сопоставляет элементы с работами по параметрам:
-   - В элементах параметры могут быть в наименовании и других столбцах
-   - В новой таблице параметры указаны в столбцах B (Наименование работ), E (Формула расчёта), F (Параметризация)
-4. К одной строке элемента может быть смаплено несколько строк из перечня работ
-5. Сохраняет результирующую таблицу в папке сессии
+Алгоритм:
+1. Определяем IFC класс элемента по наименованию
+2. Проверяем уровень элемента (подземный/надземный)
+3. Извлекаем характеристики материала (класс бетона, морозостойкость, водонепроницаемость)
+4. Определяем геометрические параметры (толщина, площадь сечения, объем, высота и т.д.)
+5. Подбираем виды работ по совпадению IFC класса, условий параметризации и характеристик материала
+6. Элементы без работ: термовкладыши, отверстия, трубы не получают виды работ
+
+Ключевые особенности v2:
+- Учет уровня элемента (подземный/надземный) для выбора работ
+- Исключение элементов без работ (термовкладыши, отверстия, трубы)
+- Проверка наличия IFC класса в таблице работ
+- Расширенная проверка параметров через регулярные выражения
 """
 
-import os
-import re
-from pathlib import Path
-from openpyxl import Workbook, load_workbook
-from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 import pandas as pd
+import re
+from typing import List, Dict, Optional, Tuple
+import sys
+import os
 
 
-def extract_parameters_from_element(element_row):
-    """
-    Извлекает параметры из строки элемента IFC.
+def parse_concrete_grade(material: str, characteristics: str) -> Optional[str]:
+    """Извлекает класс бетона из материала или характеристик"""
+    if pd.isna(material) and pd.isna(characteristics):
+        return None
     
-    Args:
-        element_row: dict со всеми колонками элемента
+    # Сначала пробуем извлечь из материала
+    if pd.notna(material):
+        match = re.search(r'[ВB](\d+)', str(material))
+        if match:
+            return f"В{match.group(1)}"
+    
+    # Затем из характеристик
+    if pd.notna(characteristics):
+        match = re.search(r'Класс бетона:\s*[ВB](\d+)', str(characteristics))
+        if match:
+            return f"В{match.group(1)}"
         
-    Returns:
-        dict с извлеченными параметрами
-    """
+        # Пробуем просто найти класс бетона в строке
+        match = re.search(r'[ВB](\d{2})', str(characteristics))
+        if match:
+            return f"В{match.group(1)}"
+    
+    return None
+
+
+def parse_freeze_durability(material: str, characteristics: str) -> Optional[str]:
+    """Извлекает марку морозостойкости F"""
+    text = ""
+    if pd.notna(material):
+        text += str(material) + " "
+    if pd.notna(characteristics):
+        text += str(characteristics)
+    
+    if not text.strip():
+        return None
+    
+    # Ищем в характеристиках
+    match = re.search(r'Морозостойкость:\s*F(\d+)', text)
+    if match:
+        return f"F{match.group(1)}"
+    
+    # Ищем просто FXXX в тексте
+    match = re.search(r'F(\d{3})', text)
+    if match:
+        return f"F{match.group(1)}"
+    
+    return None
+
+
+def parse_water_resist(material: str, characteristics: str) -> Optional[str]:
+    """Извлекает марку водонепроницаемости W"""
+    text = ""
+    if pd.notna(material):
+        text += str(material) + " "
+    if pd.notna(characteristics):
+        text += str(characteristics)
+    
+    if not text.strip():
+        return None
+    
+    # Ищем в характеристиках
+    match = re.search(r'Водонепроницаемость:\s*W(\d+)', text)
+    if match:
+        return f"W{match.group(1)}"
+    
+    # Ищем просто WX в тексте
+    match = re.search(r'W(\d+)', text)
+    if match:
+        return f"W{match.group(1)}"
+    
+    return None
+
+
+def parse_aggregate_type(material: str, characteristics: str) -> Optional[str]:
+    """Извлекает тип заполнителя (гранитный щебень и т.д.)"""
+    text = ""
+    if pd.notna(material):
+        text += str(material) + " "
+    if pd.notna(characteristics):
+        text += str(characteristics)
+    
+    if not text.strip():
+        return None
+    
+    if 'гранитный щебень' in text.lower():
+        return 'гранитный щебень'
+    elif 'гравий' in text.lower():
+        return 'гравий'
+    elif 'известняк' in text.lower():
+        return 'известняк'
+    
+    return None
+
+
+def determine_ifc_class(row: pd.Series) -> str:
+    """Определяет IFC класс элемента по наименованию и другим параметрам"""
+    name = str(row.get('Наименование', ''))
+    
+    # Сначала проверяем на элементы без работ
+    if 'Термовкладыш' in name or 'термовкладыш' in name:
+        return 'IfcThermalInsert'  # Специальный класс для элементов без работ
+    
+    if 'Отверст' in name or 'отверст' in name or 'Проем' in name:
+        return 'IfcOpeningElement'
+    
+    if 'Труб' in name and ('Гильз' in name or 'гильз' in name):
+        return 'IfcBuildingElementProxy'
+    
+    # Сопоставление по ключевым словам в наименовании
+    if 'Колонн' in name or 'НесКол' in name or 'колonn' in name.lower():
+        return 'IfcColumn'
+    elif 'Балк' in name or 'Ригел' in name or 'балк' in name.lower():
+        return 'IfcBeam'
+    elif 'Стен' in name or 'Диафрагм' in name or 'стен' in name.lower():
+        return 'IfcWall'
+    elif 'Плит' in name or 'Перекрыт' in name or 'Покрыт' in name or 'Фундаментн' in name:
+        # Различаем фундаментную плиту и перекрытие
+        if 'Фундамент' in name or 'фундамент' in name.lower() or 'ФП' in name:
+            return 'IfcSlabFoundation'
+        return 'IfcSlab'
+    elif 'Лестничн' in name and 'Марш' in name or 'марш' in name.lower():
+        return 'IfcStairFlight'
+    elif 'Лестничн' in name and 'Площадк' in name:
+        return 'IfcSlab'
+    elif 'Фундамент' in name and 'плит' not in name.lower():
+        return 'IfcFooting'
+    elif 'Ростверк' in name or 'ростверк' in name.lower():
+        return 'IfcFooting'
+    elif 'Арматур' in name or 'Армирован' in name:
+        return 'IfcReinforcingBar'
+    elif 'Закладн' in name or 'Пластина' in name:
+        return 'IfcPlate'
+    elif 'Гидрошпонк' in name:
+        return 'IfcDiscreteAccessory'
+    elif 'Приям' in name:
+        return 'IfcSlab'
+    elif 'Рен' in name or 'стяжк' in name.lower() or 'Подготовка' in name:
+        return 'IfcCovering'
+    elif 'Лестниц' in name or 'сход' in name.lower():
+        return 'IfcStairFlight'
+    elif 'Пандус' in name or 'пандус' in name.lower():
+        return 'IfcRamp'
+    
+    # Если не нашли соответствие, возвращаем пустую строку
+    return ''
+
+
+def is_element_without_works(ifc_class: str, name: str) -> bool:
+    """Проверяет, является ли элемент элементом без работ"""
+    # Элементы которые не получают виды работ
+    no_works_classes = ['IfcOpeningElement', 'IfcBuildingElementProxy', 'IfcThermalInsert']
+    
+    if ifc_class in no_works_classes:
+        return True
+    
+    # Дополнительная проверка по имени для термовкладышей
+    if 'термовкладыш' in name.lower():
+        return True
+    
+    return False
+
+
+def get_element_level(row: pd.Series) -> str:
+    """Определяет уровень элемента (подземный/надземный)"""
+    level = row.get('Подземный/Надземный', '')
+    if pd.isna(level):
+        return 'Не определено'
+    
+    level_str = str(level).strip()
+    if 'подземн' in level_str.lower() or 'подз.' in level_str.lower():
+        return 'Подземный'
+    elif 'надземн' in level_str.lower() or 'надз.' in level_str.lower():
+        return 'Надземный'
+    else:
+        return level_str
+
+
+def check_thickness_condition(element_thickness_m: float, condition: str) -> bool:
+    """Проверяет условие по толщине (t в мм)"""
+    if pd.isna(element_thickness_m) or element_thickness_m <= 0:
+        return False
+    
+    # Переводим метры в миллиметры
+    thickness_mm = element_thickness_m * 1000
+    
+    try:
+        # t<XXX мм
+        if re.search(r't\s*<\s*(\d+)', condition):
+            limit = float(re.search(r't\s*<\s*(\d+)', condition).group(1))
+            return thickness_mm < limit
+        
+        # t>XXX мм
+        if re.search(r't\s*>\s*(\d+)', condition):
+            limit = float(re.search(r't\s*>\s*(\d+)', condition).group(1))
+            return thickness_mm > limit
+        
+        # XXX<t<YYY мм
+        match = re.search(r'(\d+)\s*<\s*t\s*<\s*(\d+)', condition)
+        if match:
+            lower = float(match.group(1))
+            upper = float(match.group(2))
+            return lower < thickness_mm < upper
+        
+    except (AttributeError, ValueError):
+        pass
+    
+    return False
+
+
+def check_volume_condition(element_volume: float, condition: str) -> bool:
+    """Проверяет условие по объему (V в м³)"""
+    if pd.isna(element_volume) or element_volume <= 0:
+        return False
+    
+    try:
+        # V<XXX м3
+        if re.search(r'V\s*<\s*(\d+)', condition):
+            limit = float(re.search(r'V\s*<\s*(\d+)', condition).group(1))
+            return element_volume < limit
+        
+        # V>XXX м3
+        if re.search(r'V\s*>\s*(\d+)', condition):
+            limit = float(re.search(r'V\s*>\s*(\d+)', condition).group(1))
+            return element_volume > limit
+        
+        # XXX<V<YYY м3
+        match = re.search(r'(\d+)\s*<\s*V\s*<\s*(\d+)', condition)
+        if match:
+            lower = float(match.group(1))
+            upper = float(match.group(2))
+            return lower < element_volume < upper
+        
+    except (AttributeError, ValueError):
+        pass
+    
+    return False
+
+
+def check_area_condition(element_area: float, condition: str) -> bool:
+    """Проверяет условие по площади (S в м²)"""
+    if pd.isna(element_area) or element_area <= 0:
+        return False
+    
+    try:
+        # S<XXX м2
+        match = re.search(r'S\s*<\s*([\d.]+)\s*м?2?', condition)
+        if match:
+            limit = float(match.group(1))
+            return element_area < limit
+        
+        # S>XXX м2
+        match = re.search(r'S\s*>\s*([\d.]+)\s*м?2?', condition)
+        if match:
+            limit = float(match.group(1))
+            return element_area > limit
+        
+        # XXX<S<YYY м2
+        match = re.search(r'([\d.]+)\s*<\s*S\s*<\s*([\d.]+)', condition)
+        if match:
+            lower = float(match.group(1))
+            upper = float(match.group(2))
+            return lower < element_area < upper
+        
+    except (AttributeError, ValueError):
+        pass
+    
+    return False
+
+
+def check_cross_section_area_condition(width: float, height: float, condition: str) -> bool:
+    """Проверяет условие по площади сечения (a или S для колонн/балок)"""
+    if pd.isna(width) or pd.isna(height) or width <= 0 or height <= 0:
+        return False
+    
+    cross_section = width * height  # м²
+    
+    try:
+        # a<XXX мм (для колонн)
+        match = re.search(r'a\s*<\s*(\d+)\s*мм', condition)
+        if match:
+            limit_mm = float(match.group(1))
+            limit_m = limit_mm / 1000
+            # Для квадратного сечения сравниваем сторону
+            min_side = min(width, height)
+            return min_side < limit_m
+        
+        # a>XXX мм
+        match = re.search(r'a\s*>\s*(\d+)\s*мм', condition)
+        if match:
+            limit_mm = float(match.group(1))
+            limit_m = limit_mm / 1000
+            max_side = max(width, height)
+            return max_side > limit_m
+        
+        # XXX<a<YYY мм
+        match = re.search(r'(\d+)\s*<\s*a\s*<\s*(\d+)\s*мм', condition)
+        if match:
+            lower_mm = float(match.group(1))
+            upper_mm = float(match.group(2))
+            avg_side = (width + height) / 2
+            return lower_mm/1000 < avg_side < upper_mm/1000
+        
+        # S<XXX м2 (площадь сечения)
+        match = re.search(r'S\s*<\s*([\d.]+)\s*м2', condition)
+        if match:
+            limit = float(match.group(1))
+            return cross_section < limit
+        
+        # S>XXX м2
+        match = re.search(r'S\s*>\s*([\d.]+)\s*м2', condition)
+        if match:
+            limit = float(match.group(1))
+            return cross_section > limit
+        
+        # XXX<S<YYY м2
+        match = re.search(r'([\d.]+)\s*<\s*S\s*<\s*([\d.]+)\s*м2', condition)
+        if match:
+            lower = float(match.group(1))
+            upper = float(match.group(2))
+            return lower < cross_section < upper
+        
+    except (AttributeError, ValueError):
+        pass
+    
+    return False
+
+
+def check_perimeter_condition(width: float, height: float, condition: str) -> bool:
+    """Проверяет условие по периметру (P в мм)"""
+    if pd.isna(width) or pd.isna(height) or width <= 0 or height <= 0:
+        return False
+    
+    perimeter_mm = 2 * (width + height) * 1000  # переводим в мм
+    
+    try:
+        # P<XXX мм
+        match = re.search(r'P\s*<\s*(\d+)\s*мм', condition)
+        if match:
+            limit = float(match.group(1))
+            return perimeter_mm < limit
+        
+        # P>XXX мм
+        match = re.search(r'P\s*>\s*(\d+)\s*мм', condition)
+        if match:
+            limit = float(match.group(1))
+            return perimeter_mm > limit
+        
+    except (AttributeError, ValueError):
+        pass
+    
+    return False
+
+
+def check_height_condition(element_height: float, condition: str) -> bool:
+    """Проверяет условие по высоте (H в м)"""
+    if pd.isna(element_height) or element_height <= 0:
+        return False
+    
+    try:
+        # H<XXX м
+        match = re.search(r'H\s*<\s*(\d+)\s*м', condition)
+        if match:
+            limit = float(match.group(1))
+            return element_height < limit
+        
+        # H>XXX м
+        match = re.search(r'H\s*>\s*(\d+)\s*м', condition)
+        if match:
+            limit = float(match.group(1))
+            return element_height > limit
+        
+        # XXX<H<YYY м
+        match = re.search(r'(\d+)\s*<\s*H\s*<\s*(\d+)\s*м', condition)
+        if match:
+            lower = float(match.group(1))
+            upper = float(match.group(2))
+            return lower < element_height < upper
+        
+    except (AttributeError, ValueError):
+        pass
+    
+    return False
+
+
+def check_rebar_diameter_condition(condition: str, diameter: Optional[float] = None) -> bool:
+    """Проверяет условие по диаметру арматуры (Ф в мм)"""
+    try:
+        # Ф = X мм
+        match = re.search(r'Ф\s*=\s*(\d+)', condition)
+        if match:
+            target_diameter = int(match.group(1))
+            if diameter is not None:
+                return abs(diameter - target_diameter) < 1
+            return True  # Если диаметр не указан, считаем что условие выполняется
+        
+        # X<=Ф<=Y мм
+        match = re.search(r'(\d+)\s*<=\s*Ф\s*<=\s*(\d+)', condition)
+        if match:
+            lower = int(match.group(1))
+            upper = int(match.group(2))
+            if diameter is not None:
+                return lower <= diameter <= upper
+            return True
+        
+    except (AttributeError, ValueError):
+        pass
+    
+    return False
+
+
+def check_concrete_condition(element_grade: str, element_freeze: str, element_water: str, 
+                              element_aggregate: str, condition: str) -> bool:
+    """Проверяет условие по классу бетона и маркам"""
+    if pd.isna(condition):
+        return True
+    
+    condition_str = str(condition).upper()
+    
+    # Проверяем класс бетона
+    grade_match = re.search(r'[BВ](\d+)', condition_str)
+    if grade_match and element_grade:
+        required_grade = f"В{grade_match.group(1)}"
+        if required_grade != element_grade:
+            return False
+    
+    # Проверяем морозостойкость
+    freeze_match = re.search(r'F(\d+)', condition_str)
+    if freeze_match and element_freeze:
+        required_freeze = f"F{freeze_match.group(1)}"
+        if required_freeze != element_freeze:
+            return False
+    
+    # Проверяем водонепроницаемость
+    water_match = re.search(r'W(\d+)', condition_str)
+    if water_match and element_water:
+        required_water = f"W{water_match.group(1)}"
+        if required_water != element_water:
+            return False
+    
+    # Проверяем тип заполнителя
+    if 'ГРАНИТНЫЙ ЩЕБЕНЬ' in condition_str.upper():
+        if element_aggregate != 'гранитный щебень':
+            return False
+    
+    return True
+
+
+def get_element_parameters(row: pd.Series) -> Dict:
+    """Извлекает параметры элемента из строки таблицы"""
+    material = row.get('Материал', '')
+    characteristics = row.get('Характеристики материала', '')
+    
     params = {
-        'name': '',
-        'category': '',
-        'material': '',
-        'concrete_class': '',
-        'frost': '',
-        'water': '',
-        'width': None,
-        'height': None,
-        'length': None,
-        'thickness': None,
-        'volume': None,
-        'area': None,
-        'underground': None
+        'ifc_class': determine_ifc_class(row),
+        'name': row.get('Наименование', ''),
+        'level': get_element_level(row),
+        'concrete_grade': parse_concrete_grade(material, characteristics),
+        'freeze_durability': parse_freeze_durability(material, characteristics),
+        'water_resist': parse_water_resist(material, characteristics),
+        'aggregate_type': parse_aggregate_type(material, characteristics),
+        'thickness_m': row.get('Толщина, м', float('nan')),
+        'width_m': row.get('Ширина, м', float('nan')),
+        'height_m': row.get('Высота, м', float('nan')),
+        'length_m': row.get('Длина, м', float('nan')),
+        'volume_m3': row.get('Объем, м³', float('nan')),
+        'area_m2': row.get('Площадь, м²', float('nan')),
     }
     
-    # Наименование
-    name = element_row.get('Наименование', '') or ''
-    params['name'] = str(name).upper() if name is not None else ''
+    # Вычисляем площадь сечения для колонн и балок
+    if pd.notna(params['width_m']) and pd.notna(params['height_m']):
+        params['cross_section_area'] = params['width_m'] * params['height_m']
+    else:
+        params['cross_section_area'] = float('nan')
     
-    # Категория (из classify_element)
-    category = element_row.get('category', '') or ''
-    params['category'] = str(category).upper() if category is not None else ''
+    # Вычисляем периметр сечения
+    if pd.notna(params['width_m']) and pd.notna(params['height_m']):
+        params['perimeter_m'] = 2 * (params['width_m'] + params['height_m'])
+    else:
+        params['perimeter_m'] = float('nan')
     
-    # Материал
-    material = element_row.get('Материал', '') or ''
-    params['material'] = str(material).upper() if material is not None else ''
-    
-    # Характеристики материала
-    char_str = element_row.get('Характеристики материала', '') or ''
-    if char_str:
-        # Класс бетона (B30, B25, B35, B7.5 и т.д.)
-        class_match = re.search(r'[BВ]\s?(\d+(?:[.,]\d+)?)', str(char_str).upper())
-        if class_match:
-            params['concrete_class'] = class_match.group(1).replace(',', '.')
-        
-        # Морозостойкость (F150, F100 и т.д.)
-        frost_match = re.search(r'F(\d+)', str(char_str).upper())
-        if frost_match:
-            params['frost'] = frost_match.group(1)
-        
-        # Водонепроницаемость (W6, W8 и т.д.)
-        water_match = re.search(r'W(\d+)', str(char_str).upper())
-        if water_match:
-            params['water'] = water_match.group(1)
-    
-    # Размеры
-    params['width'] = element_row.get('Ширина, м')
-    params['height'] = element_row.get('Высота, м')
-    params['length'] = element_row.get('Длина, м')
-    params['thickness'] = element_row.get('Толщина, м')
-    
-    # Объем и площадь
-    params['volume'] = element_row.get('Объем, м³')
-    params['area'] = element_row.get('Площадь, м²')
-    
-    # Подземный/Надземный
-    underground_status = element_row.get('Подземный/Надземный', '')
-    if underground_status:
-        params['underground'] = 'ПОДЗЕМ' in str(underground_status).upper()
+    # Определяем, является ли элемент без работ
+    params['no_works'] = is_element_without_works(params['ifc_class'], params['name'])
     
     return params
 
 
-def extract_parameters_from_work(work_row):
-    """
-    Извлекает параметры из строки перечня работ.
-    
-    Args:
-        work_row: dict со столбцами B, E, F
-        
-    Returns:
-        dict с извлеченными параметрами
-    """
-    params = {
-        'work_name': '',
-        'formula': '',
-        'parameters': '',
-        'concrete_class': '',
-        'thickness_min': None,
-        'thickness_max': None,
-        'height_min': None,
-        'height_max': None,
-        'area_min': None,
-        'area_max': None,
-        'perimeter_min': None,
-        'perimeter_max': None,
-        'diameter_min': None,
-        'diameter_max': None,
-        'is_underground': None  # True/False если указано
-    }
-    
-    # Столбец B - Наименование работ
-    work_name = work_row.get('Наименование работ', '') or ''
-    params['work_name'] = str(work_name).upper() if work_name is not None else ''
-    
-    # Столбец E - Формула расчёта
-    formula = work_row.get('Формула расчёта объёмов работ и расхода материалов', '') or ''
-    params['formula'] = str(formula).upper() if formula is not None else ''
-    
-    # Столбец F - Параметризация
-    parameters = work_row.get('Параметризация', '') or ''
-    params['parameters'] = str(parameters).upper() if parameters is not None else ''
-    
-    # Объединяем текст для парсинга
-    combined_text = f"{params['work_name']} {params['parameters']}"
-    
-    # Класс бетона
-    class_match = re.search(r'[BВ]\s?(\d+(?:[.,]\d+)?)', combined_text)
-    if class_match:
-        params['concrete_class'] = class_match.group(1).replace(',', '.')
-    
-    # Толщина t (например t>300 мм, 150<t<200 мм)
-    thickness_match = re.search(r'(\d+(?:\.\d+)?)\s*<\s*t\s*<\s*(\d+(?:\.\d+)?)', combined_text)
-    if thickness_match:
-        params['thickness_min'] = float(thickness_match.group(1))
-        params['thickness_max'] = float(thickness_match.group(2))
-    else:
-        t_gt_match = re.search(r't\s*>\s*(\d+(?:\.\d+)?)', combined_text)
-        if t_gt_match:
-            params['thickness_min'] = float(t_gt_match.group(1))
-        
-        t_lt_match = re.search(r't\s*<\s*(\d+(?:\.\d+)?)', combined_text)
-        if t_lt_match:
-            params['thickness_max'] = float(t_lt_match.group(1))
-    
-    # Высота H
-    height_match = re.search(r'(\d+(?:\.\d+)?)\s*<\s*H\s*<\s*(\d+(?:\.\d+)?)', combined_text)
-    if height_match:
-        params['height_min'] = float(height_match.group(1))
-        params['height_max'] = float(height_match.group(2))
-    else:
-        h_gt_match = re.search(r'H\s*>\s*(\d+(?:\.\d+)?)', combined_text)
-        if h_gt_match:
-            params['height_min'] = float(h_gt_match.group(1))
-        
-        h_lt_match = re.search(r'H\s*<\s*(\d+(?:\.\d+)?)', combined_text)
-        if h_lt_match:
-            params['height_max'] = float(h_lt_match.group(1))
-    
-    # Площадь S
-    area_match = re.search(r'(\d+(?:\.\d+)?)\s*<\s*S\s*<\s*(\d+(?:\.\d+)?)', combined_text)
-    if area_match:
-        params['area_min'] = float(area_match.group(1))
-        params['area_max'] = float(area_match.group(2))
-    else:
-        s_gt_match = re.search(r'S\s*>\s*(\d+(?:\.\d+)?)', combined_text)
-        if s_gt_match:
-            params['area_min'] = float(s_gt_match.group(1))
-        
-        s_lt_match = re.search(r'S\s*<\s*(\d+(?:\.\d+)?)', combined_text)
-        if s_lt_match:
-            params['area_max'] = float(s_lt_match.group(1))
-    
-    # Периметр P
-    perimeter_match = re.search(r'(\d+(?:\.\d+)?)\s*<\s*P\s*<\s*(\d+(?:\.\d+)?)', combined_text)
-    if perimeter_match:
-        params['perimeter_min'] = float(perimeter_match.group(1))
-        params['perimeter_max'] = float(perimeter_match.group(2))
-    else:
-        p_gt_match = re.search(r'P\s*>\s*(\d+(?:\.\d+)?)', combined_text)
-        if p_gt_match:
-            params['perimeter_min'] = float(p_gt_match.group(1))
-        
-        p_lt_match = re.search(r'P\s*<\s*(\d+(?:\.\d+)?)', combined_text)
-        if p_lt_match:
-            params['perimeter_max'] = float(p_lt_match.group(1))
-    
-    # Диаметр арматуры Ф (Фи)
-    diameter_match = re.search(r'(\d+(?:\.\d+)?)\s*<=?\s*[ФФ]\s*<=?\s*(\d+(?:\.\d+)?)', combined_text)
-    if diameter_match:
-        params['diameter_min'] = float(diameter_match.group(1))
-        params['diameter_max'] = float(diameter_match.group(2))
-    else:
-        phi_eq_match = re.search(r'[ФФ]\s*=\s*(\d+(?:\.\d+)?)', combined_text)
-        if phi_eq_match:
-            params['diameter_min'] = float(phi_eq_match.group(1))
-            params['diameter_max'] = float(phi_eq_match.group(1))
-        
-        phi_gt_match = re.search(r'[ФФ]\s*>\s*(\d+(?:\.\d+)?)', combined_text)
-        if phi_gt_match:
-            params['diameter_min'] = float(phi_gt_match.group(1))
-        
-        phi_lt_match = re.search(r'[ФФ]\s*<\s*(\d+(?:\.\d+)?)', combined_text)
-        if phi_lt_match:
-            params['diameter_max'] = float(phi_lt_match.group(1))
-    
-    # Проверка на подземную часть
-    if 'ПОДЗЕМН' in combined_text or 'ПОДЗЕМНАЯ ЧАСТЬ' in combined_text:
-        params['is_underground'] = True
-    
-    return params
+def normalize_ifc_class(ifc_str: str) -> str:
+    """Нормализует IFC класс для сравнения"""
+    if pd.isna(ifc_str):
+        return ''
+    return str(ifc_str).strip().lower()
 
 
-def check_element_work_match(element_params, work_params):
-    """
-    Проверяет соответствие элемента работе по параметрам.
+def ifc_class_matches(element_ifc: str, work_ifc: str) -> bool:
+    """Проверяет совпадение IFC классов с учетом множественных значений"""
+    if not work_ifc or work_ifc in ['не моделируется', 'чаще всего не моделируется', '-', '']:
+        return True  # Универсальные работы подходят ко всем
     
-    Args:
-        element_params: dict параметров элемента
-        work_params: dict параметров работы
+    # Нормализуем для сравнения
+    elem_ifc_norm = element_ifc.lower()
+    work_ifc_norm = work_ifc.lower()
+    
+    # Работа может иметь несколько IFC классов через \n
+    work_ifcs = [x.strip() for x in work_ifc_norm.split('\n')]
+    
+    for w_ifc in work_ifcs:
+        if w_ifc in ['не моделируется', 'чаще всего не моделируется', '-', '']:
+            continue
         
-    Returns:
-        tuple (bool, score) - совпадение и оценка соответствия
-    """
-    score = 0
-    max_score = 0
+        # Прямое совпадение
+        if elem_ifc_norm == w_ifc:
+            return True
+        
+        # Особые случаи
+        # IfcSlabFoundation может соответствовать IfcSlab или IfcFooting
+        if elem_ifc_norm == 'ifcslabfoundation':
+            if w_ifc in ['ifcslab', 'ifcfooting']:
+                return True
+        
+        # IfcCovering (строчные буквы в таблице)
+        if w_ifc == 'ifccovering' and elem_ifc_norm == 'ifccovering':
+            return True
     
-    # 1. Проверка класса бетона
-    if work_params['concrete_class']:
-        max_score += 3
-        if element_params['concrete_class'] == work_params['concrete_class']:
-            score += 3
-    
-    # 2. Проверка толщины
-    if work_params['thickness_min'] is not None or work_params['thickness_max'] is not None:
-        max_score += 2
-        elem_thickness = element_params.get('thickness')
-        if elem_thickness is not None:
-            elem_t_mm = elem_thickness * 1000  # конвертируем в мм
-            match = True
-            if work_params['thickness_min'] is not None and elem_t_mm <= work_params['thickness_min']:
-                match = False
-            if work_params['thickness_max'] is not None and elem_t_mm >= work_params['thickness_max']:
-                match = False
-            if match:
-                score += 2
-    
-    # 3. Проверка категории элемента vs наименования работы
-    max_score += 3
-    elem_cat = str(element_params.get('category', '') or '').upper()
-    work_name = str(work_params.get('work_name', '') or '').upper()
-    
-    category_keywords = {
-        'СТЕНА': ['СТЕН', 'WALL'],
-        'КОЛОННА': ['КОЛОНН', 'COLUMN'],
-        'БАЛКА': ['БАЛК', 'BEAM'],
-        'ПЕРЕКРЫТИЕ_ПЛИТА': ['ПЛИТ', 'СЛАБ', 'ПЕРЕКРЫТИ'],
-        'ФУНДАМЕНТ_ПЛИТА': ['ФУНДАМЕНТ', 'FOUNDATION'],
-        'ЛЕСТНИЦА': ['ЛЕСТНИЧ', 'STAIR'],
-    }
-    
-    for cat_key, keywords in category_keywords.items():
-        if elem_cat == cat_key.upper() or cat_key in elem_cat:
-            for kw in keywords:
-                if kw in work_name:
-                    score += 3
-                    break
-            break
-    
-    # 4. Проверка подземности
-    if work_params['is_underground'] is not None:
-        max_score += 2
-        if element_params.get('underground') == work_params['is_underground']:
-            score += 2
-    
-    # 5. Проверка диаметра арматуры (для арматурных работ)
-    if work_params['diameter_min'] is not None or work_params['diameter_max'] is not None:
-        max_score += 2
-        # Ищем диаметр в имени элемента или характеристиках
-        elem_name = element_params.get('name', '')
-        diam_match = re.search(r'D\s*=?\s*(\d+(?:\.\d+)?)', elem_name)
-        if diam_match:
-            elem_diam = float(diam_match.group(1))
-            match = True
-            if work_params['diameter_min'] is not None and elem_diam < work_params['diameter_min']:
-                match = False
-            if work_params['diameter_max'] is not None and elem_diam > work_params['diameter_max']:
-                match = False
-            if match:
-                score += 2
-    
-    # Нормализуем оценку
-    if max_score == 0:
-        return False, 0
-    
-    normalized_score = score / max_score if max_score > 0 else 0
-    
-    # Порог совпадения - 0.5 (50%)
-    return normalized_score >= 0.5, normalized_score
+    return False
 
 
-def map_elements_to_works(session_folder):
-    """
-    Основная функция маппинга элементов к работам.
+def match_work_to_element(element_params: Dict, work_row: pd.Series) -> bool:
+    """Проверяет, подходит ли вид работы к элементу"""
     
-    Args:
-        session_folder: Папка сессии
+    # 1. Проверяем, является ли элемент элементом без работ
+    if element_params['no_works']:
+        return False
+    
+    # 2. Проверяем IFC класс
+    work_ifc = str(work_row.get('IFC класс', ''))
+    element_ifc = element_params['ifc_class']
+    
+    if not ifc_class_matches(element_ifc, work_ifc):
+        return False
+    
+    # 3. Проверяем параметризацию
+    parametrization = str(work_row.get('Параметризация', ''))
+    if pd.notna(parametrization) and parametrization not in ['nan', '', '-']:
+        param_lines = parametrization.split('\n')
         
-    Returns:
-        Dict с результатами
-    """
-    print(f"\n{'='*60}")
-    print("🔗 МАППИНГ ЭЛЕМЕНТОВ К РАБОТАМ")
-    print(f"{'='*60}")
-    
-    # Шаг 1: Загрузка full_elements.xlsx
-    elements_file = Path(session_folder) / "full_elements.xlsx"
-    if not elements_file.exists():
-        print(f"❌ Файл {elements_file} не найден")
-        return {'success': False, 'error': 'full_elements.xlsx not found'}
-    
-    print(f"📁 Загрузка элементов из: {elements_file}")
-    df_elements = pd.read_excel(str(elements_file))
-    print(f"   ✅ Загружено {len(df_elements)} элементов")
-    
-    # Шаг 2: Загрузка Перечень работ КР_new.xlsx
-    works_file = Path(session_folder) / "Перечень работ КР_new.xlsx"
-    if not works_file.exists():
-        print(f"❌ Файл {works_file} не найден")
-        return {'success': False, 'error': 'Перечень работ КР_new.xlsx not found'}
-    
-    print(f"📁 Загрузка перечня работ из: {works_file}")
-    df_works = pd.read_excel(str(works_file), sheet_name='ВОР КР+расценки')
-    print(f"   ✅ Загружено {len(df_works)} работ")
-    
-    # Шаг 3: Маппинг
-    print("\n🔍 Выполнение маппинга...")
-    
-    mapping_results = []
-    matched_count = 0
-    
-    for idx, elem_row in df_elements.iterrows():
-        element_params = extract_parameters_from_element(elem_row.to_dict())
-        matched_works = []
-        
-        for work_idx, work_row in df_works.iterrows():
-            work_row_dict = {
-                'Наименование работ': work_row.get('Наименование работ'),
-                'Формула расчёта объёмов работ и расхода материалов': work_row.get('Формула расчёта объёмов работ и расхода материалов'),
-                'Параметризация': work_row.get('Параметризация')
-            }
-            work_params = extract_parameters_from_work(work_row_dict)
+        for param_line in param_lines:
+            param_line = param_line.strip()
+            if not param_line or param_line in ['-', 'nan']:
+                continue
             
-            is_match, score = check_element_work_match(element_params, work_params)
+            # Проверяем условия по толщине (t)
+            if re.search(r'\bt\b', param_line.lower()) and ('<' in param_line or '>' in param_line):
+                if not check_thickness_condition(element_params['thickness_m'], param_line):
+                    return False
             
-            if is_match:
-                matched_works.append({
-                    'work_index': work_idx,
-                    'score': score,
-                    'work_data': work_row.to_dict()
-                })
-        
-        if matched_works:
-            matched_count += 1
-        
-        # Сохраняем результат для элемента
-        mapping_results.append({
-            'element_index': idx,
-            'element_name': elem_row.get('Наименование', ''),
-            'matched_works': matched_works,
-            'match_count': len(matched_works)
-        })
-        
-        if (idx + 1) % 100 == 0:
-            print(f"   Обработано {idx + 1} элементов...")
+            # Проверяем условия по объему (V)
+            if re.search(r'\bv\b', param_line.lower()) and ('<' in param_line or '>' in param_line):
+                if not check_volume_condition(element_params['volume_m3'], param_line):
+                    return False
+            
+            # Проверяем условия по площади (S)
+            if re.search(r'\bs\b', param_line.lower()) and ('<' in param_line or '>' in param_line):
+                # Сначала проверяем как площадь сечения для колонн/балок
+                if element_params['ifc_class'] in ['ifccolumn', 'ifcbeam']:
+                    if not check_cross_section_area_condition(
+                        element_params['width_m'], 
+                        element_params['height_m'], 
+                        param_line
+                    ):
+                        return False
+                else:
+                    if not check_area_condition(element_params['area_m2'], param_line):
+                        return False
+            
+            # Проверяем условия по периметру (P)
+            if re.search(r'\bp\b', param_line.lower()) and ('<' in param_line or '>' in param_line):
+                if not check_perimeter_condition(
+                    element_params['width_m'], 
+                    element_params['height_m'], 
+                    param_line
+                ):
+                    return False
+            
+            # Проверяем условия по высоте (H)
+            if re.search(r'\bh\b', param_line.lower()) and ('<' in param_line or '>' in param_line):
+                if not check_height_condition(element_params['height_m'], param_line):
+                    return False
+            
+            # Проверяем условия по бетону и маркам
+            if re.search(r'[bв]\d+|f\d+|w\d+|щебень', param_line.lower()):
+                if not check_concrete_condition(
+                    element_params['concrete_grade'],
+                    element_params['freeze_durability'],
+                    element_params['water_resist'],
+                    element_params['aggregate_type'],
+                    param_line
+                ):
+                    return False
+            
+            # Проверяем условия по диаметру арматуры (Ф)
+            if 'ф' in param_line.lower() or 'ф=' in param_line:
+                if not check_rebar_diameter_condition(param_line):
+                    return False
     
-    print(f"\n   ✅ Смаппировано {matched_count} элементов из {len(df_elements)}")
+    return True
+
+
+def find_works_for_element(element_row: pd.Series, works_df: pd.DataFrame, 
+                           works_by_ifc: Dict, works_universal: pd.DataFrame) -> List[Dict]:
+    """Находит все подходящие виды работ для элемента"""
     
-    # Шаг 4: Создание результирующей таблицы
-    print("\n📊 Создание результирующей таблицы...")
+    element_params = get_element_parameters(element_row)
     
-    result_rows = []
+    # Если элемент без работ, сразу возвращаем пустой список
+    if element_params['no_works']:
+        return []
     
-    for mapping in mapping_results:
-        elem_name = mapping['element_name']
-        matched_works = mapping['matched_works']
-        
-        if matched_works:
-            # Для каждого смаппированного work создаем строку
-            for work_match in matched_works:
-                work_data = work_match['work_data']
-                result_rows.append({
-                    'Элемент IFC': elem_name,
-                    '№ п/п работы': work_data.get('№ п/п'),
-                    'Наименование работ': work_data.get('Наименование работ'),
-                    'Ед. изм': work_data.get('Ед. изм'),
-                    'IFC класс': work_data.get('IFC класс'),
-                    'Формула расчёта': work_data.get('Формула расчёта объёмов работ и расхода материалов'),
-                    'Параметризация': work_data.get('Параметризация'),
-                    'Шифр ТСН': work_data.get('Шифр ТСН'),
-                    'Наименование расценки/ресурса': work_data.get('Наименование расценки/ресурса'),
-                    'Ед. изм.': work_data.get('Ед. изм.'),
-                    'V по смете': work_data.get('V по смете'),
-                    'Обозначения': work_data.get('Обозначения'),
-                    'Оценка соответствия': round(work_match['score'], 2)
-                })
-        else:
-            # Элемент без匹配的 работ
-            result_rows.append({
-                'Элемент IFC': elem_name,
-                '№ п/п работы': None,
-                'Наименование работ': None,
-                'Ед. изм': None,
-                'IFC класс': None,
-                'Формула расчёта': None,
-                'Параметризация': None,
-                'Шифр ТСН': None,
-                'Наименование расценки/ресурса': None,
-                'Ед. изм.': None,
-                'V по смете': None,
-                'Обозначения': None,
-                'Оценка соответствия': None
+    matched_works = []
+    element_ifc = element_params['ifc_class'].lower()
+    
+    # Собираем подходящие работы
+    candidate_works = []
+    
+    # Добавляем работы для конкретного IFC класса
+    if element_ifc in works_by_ifc:
+        for _, work_row in works_by_ifc[element_ifc].iterrows():
+            candidate_works.append(work_row)
+    
+    # Добавляем универсальные работы
+    if works_universal is not None:
+        for _, work_row in works_universal.iterrows():
+            candidate_works.append(work_row)
+    
+    # Проверяем каждую кандидатуру
+    for work_row in candidate_works:
+        if match_work_to_element(element_params, work_row):
+            matched_works.append({
+                'work_idx': work_row.name,
+                'work_name': work_row.get('Наименование работ', ''),
+                'unit': work_row.get('Ед. изм', ''),
+                'tsn_code': work_row.get('Шифр ТСН', ''),
+                'description': work_row.get('Наименование расценки/ресурса', ''),
+                'formula': work_row.get('Формула расчёта объёмов работ и расхода материалов', ''),
+                'parametrization': work_row.get('Параметризация', ''),
             })
     
-    # Создаем DataFrame
-    df_result = pd.DataFrame(result_rows)
-    
-    # Сохранение
-    output_path = Path(session_folder) / "mapped_elements_works.xlsx"
-    df_result.to_excel(str(output_path), index=False)
-    print(f"✅ Результат сохранен: {output_path}")
-    
-    return {
-        'success': True,
-        'output_file': 'mapped_elements_works.xlsx',
-        'output_path': str(output_path),
-        'total_elements': len(df_elements),
-        'matched_elements': matched_count,
-        'total_works': len(df_works),
-        'result_rows': len(result_rows)
-    }
+    return matched_works
 
 
-# Entry point when run directly
-if __name__ == "__main__":
+def load_and_prepare_works(works_file: str) -> Tuple[pd.DataFrame, Dict, pd.DataFrame]:
+    """Загружает и подготавливает таблицу работ"""
+    print(f"Загрузка таблицы работ из {works_file}...")
+    
+    # Пробуем разные варианты названия листа
+    try:
+        df_works = pd.read_excel(works_file, sheet_name='ВОР КР+расценки')
+    except:
+        try:
+            df_works = pd.read_excel(works_file, sheet_name='Перечень работ КР_new')
+        except:
+            df_works = pd.read_excel(works_file)
+    
+    print(f"Виды работ: {len(df_works)} строк")
+    
+    # Предварительно обрабатываем виды работ - фильтруем заголовки разделов
+    valid_works_mask = df_works['IFC класс'].notna() | df_works['Шифр ТСН'].notna()
+    df_works_valid = df_works[valid_works_mask].copy()
+    print(f"Валидных видов работ: {len(df_works_valid)}")
+    
+    # Группируем работы по IFC классам для ускорения поиска
+    works_by_ifc = {}
+    
+    # Получаем уникальные IFC классы
+    unique_ifcs = df_works_valid['IFC класс'].dropna().unique()
+    
+    for ifc_class in unique_ifcs:
+        if pd.notna(ifc_class) and ifc_class not in ['не моделируется', 'чаще всего не моделируется', '-', '']:
+            # Нормализуем IFC класс (приводим к нижнему регистру)
+            ifc_lower = str(ifc_class).lower()
+            
+            # Разбиваем на отдельные классы если их несколько
+            ifc_parts = [x.strip() for x in ifc_lower.split('\n')]
+            
+            for ifc_part in ifc_parts:
+                if ifc_part and ifc_part not in ['не моделируется', 'чаще всего не моделируется', '-', '']:
+                    if ifc_part not in works_by_ifc:
+                        works_by_ifc[ifc_part] = df_works_valid[df_works_valid['IFC класс'].str.contains(ifc_class, na=False)]
+    
+    # Работы без привязки к IFC классу (универсальные)
+    universal_mask = df_works_valid['IFC класс'].isin(['не моделируется', 'чаще всего не моделируется', '-', '']) | df_works_valid['IFC класс'].isna()
+    works_universal = df_works_valid[universal_mask].copy()
+    
+    return df_works_valid, works_by_ifc, works_universal
+
+
+def main(session_folder=None):
+    # Пути к файлам - используем аргументы командной строки или значения по умолчанию
+    if len(sys.argv) >= 4:
+        elements_file = sys.argv[1]
+        works_file = sys.argv[2]
+        output_file = sys.argv[3]
+    elif session_folder:
+        # Используем папку сессии
+        elements_file = os.path.join(session_folder, 'full_elements.xlsx')
+        works_file = os.path.join(session_folder, 'Перечень работ КР_new.xlsx')
+        output_file = os.path.join(session_folder, 'mapped_elements_works.xlsx')
+    else:
+        # Значения по умолчанию
+        elements_file = 'uploads/b43c911d-191d-42e5-a953-810feb9bf2de/full_elements.xlsx'
+        works_file = 'uploads/b43c911d-191d-42e5-a953-810feb9bf2de/Перечень работ КР_new.xlsx'
+        output_file = 'uploads/b43c911d-191d-42e5-a953-810feb9bf2de/mapped_elements_works.xlsx'
+    
+    # Проверяем существование файлов
+    if not os.path.exists(elements_file):
+        print(f"Ошибка: файл элементов не найден: {elements_file}")
+        sys.exit(1)
+    
+    if not os.path.exists(works_file):
+        print(f"Ошибка: файл работ не найден: {works_file}")
+        sys.exit(1)
+    
+    print("=" * 60)
+    print("Подбор видов работ к элементам (версия 2)")
+    print("=" * 60)
+    
+    # Загружаем элементы
+    print(f"\nЗагрузка таблицы элементов из {elements_file}...")
+    df_elements = pd.read_excel(elements_file)
+    print(f"Элементы: {len(df_elements)} строк")
+    
+    # Загружаем и подготавливаем работы
+    df_works_valid, works_by_ifc, works_universal = load_and_prepare_works(works_file)
+    
+    # Обрабатываем элементы
+    results = []
+    elements_with_works = set()
+    elements_without_works = set()
+    
+    print("\nПодбор видов работ для элементов...")
+    for idx, element_row in df_elements.iterrows():
+        if idx % 500 == 0:
+            print(f"Обработано {idx} из {len(df_elements)} элементов...")
+        
+        element_params = get_element_parameters(element_row)
+        
+        # Если элемент без работ, пропускаем его
+        if element_params['no_works']:
+            elements_without_works.add(idx)
+            continue
+        
+        # Находим подходящие работы
+        matched_works = find_works_for_element(
+            element_row, df_works_valid, works_by_ifc, works_universal
+        )
+        
+        if matched_works:
+            elements_with_works.add(idx)
+            for work in matched_works:
+                result = {
+                    'Element_Index': idx,
+                    'Element_Name': element_row.get('Наименование', ''),
+                    'Element_Material': element_row.get('Материал', ''),
+                    'Element_Characteristics': element_row.get('Характеристики материала', ''),
+                    'Element_Level': element_params['level'],
+                    'IFC_Class': element_params['ifc_class'],
+                    'Concrete_Grade': element_params['concrete_grade'],
+                    'Freeze_Durability': element_params['freeze_durability'],
+                    'Water_Resist': element_params['water_resist'],
+                    'Volume_m3': element_row.get('Объем, м³', ''),
+                    'Thickness_m': element_row.get('Толщина, м', ''),
+                    'Width_m': element_row.get('Ширина, м', ''),
+                    'Height_m': element_row.get('Высота, м', ''),
+                    'Length_m': element_row.get('Длина, м', ''),
+                    'Area_m2': element_row.get('Площадь, м²', ''),
+                    'Work_Name': work['work_name'],
+                    'Work_Unit': work['unit'],
+                    'TSN_Code': work['tsn_code'],
+                    'Work_Description': work['description'],
+                    'Formula': work['formula'],
+                    'Parametrization': work['parametrization'],
+                }
+                results.append(result)
+        else:
+            # Элемент не имеет подходящих работ (нет в таблице работ)
+            elements_without_works.add(idx)
+    
+    # Создаем DataFrame с результатами
+    df_results = pd.DataFrame(results)
+    
+    print(f"\n{'=' * 60}")
+    print(f"Результаты подбора видов работ")
+    print(f"{'=' * 60}")
+    print(f"Найдено {len(df_results)} соответствий элемент-работа")
+    print(f"Уникальных элементов с работами: {len(elements_with_works)}")
+    print(f"Элементов без работ (исключены): {len(elements_without_works)}")
+    
+    # Сохраняем результат
+    df_results.to_excel(output_file, index=False)
+    print(f"\nРезультаты сохранены в файл: {output_file}")
+    
+    # Выводим статистику
+    print("\n" + "=" * 60)
+    print("Статистика по типам элементов (IFC класс)")
+    print("=" * 60)
+    if len(df_results) > 0:
+        ifc_counts = df_results['IFC_Class'].value_counts()
+        for ifc_class, count in ifc_counts.items():
+            print(f"{ifc_class}: {count} работ")
+    
+    print("\n" + "=" * 60)
+    print("Статистика по уровням элементов")
+    print("=" * 60)
+    if len(df_results) > 0:
+        level_counts = df_results['Element_Level'].value_counts()
+        for level, count in level_counts.items():
+            print(f"{level}: {count} работ")
+    
+    print("\n" + "=" * 60)
+    print("Примеры результатов (первые 10)")
+    print("=" * 60)
+    if len(df_results) > 0:
+        print(df_results[['Element_Name', 'IFC_Class', 'Element_Level', 'Concrete_Grade', 'Work_Name']].head(10).to_string())
+    
+    print("\n" + "=" * 60)
+    print("Элементы без работ (первые 20)")
+    print("=" * 60)
+    if len(elements_without_works) > 0:
+        without_works_list = list(elements_without_works)[:20]
+        for idx in without_works_list:
+            element_row = df_elements.iloc[idx]
+            params = get_element_parameters(element_row)
+            print(f"[{idx}] {element_row.get('Наименование', '')[:80]} | IFC: {params['ifc_class']} | Уровень: {params['level']}")
+    
+    print("\n" + "=" * 60)
+    print("Работа завершена успешно!")
+    print("=" * 60)
+
+
+if __name__ == '__main__':
     import sys
     
-    if len(sys.argv) < 2:
+    if len(sys.argv) >= 2:
+        session_folder = sys.argv[1]
+        main(session_folder)
+    else:
         print("Использование: python map_elements_to_works.py <session_folder>")
         print("Пример: python map_elements_to_works.py /workspace/uploads/session_id")
-        sys.exit(1)
-    
-    session_folder = sys.argv[1]
-    result = map_elements_to_works(session_folder)
-    
-    if result.get('success'):
-        print(f"\n✅ Маппинг завершен успешно!")
-        print(f"   Всего элементов: {result['total_elements']}")
-        print(f"   Смаппировано элементов: {result['matched_elements']}")
-        print(f"   Строк в результате: {result['result_rows']}")
-        print(f"   Результат: {result['output_file']}")
-    else:
-        print(f"\n❌ Ошибка: {result.get('error', 'Unknown error')}")
-        sys.exit(1)
+        # Для обратной совместимости запускаем без аргументов
+        main()
