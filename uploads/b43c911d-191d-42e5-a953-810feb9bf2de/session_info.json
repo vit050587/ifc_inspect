@@ -1,5 +1,5 @@
 {
-  "session_id": "c632823e-37d8-407a-b24b-38864701cf3c",
+  "session_id": "b43c911d-191d-42e5-a953-810feb9bf2de",
   "status": "completed",
   "pdf_files": [
     "ВОР КР.pdf",
@@ -26,8 +26,8 @@
       "volume_statement": [
         {
           "filename": "ВОР КР.pdf",
-          "source_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/c632823e-37d8-407a-b24b-38864701cf3c/pdf_documents/ВОР КР.pdf",
-          "dest_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/c632823e-37d8-407a-b24b-38864701cf3c/volume_statement/ВОР КР.pdf",
+          "source_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/b43c911d-191d-42e5-a953-810feb9bf2de/pdf_documents/ВОР КР.pdf",
+          "dest_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/b43c911d-191d-42e5-a953-810feb9bf2de/volume_statement/ВОР КР.pdf",
           "category": "volume_statement",
           "pages_analyzed": 3,
           "file_size": 999778
@@ -36,8 +36,8 @@
       "explanatory_note": [
         {
           "filename": "Текстовая и графическая часть КР.pdf",
-          "source_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/c632823e-37d8-407a-b24b-38864701cf3c/pdf_documents/Текстовая и графическая часть КР.pdf",
-          "dest_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/c632823e-37d8-407a-b24b-38864701cf3c/explanatory_note/Текстовая и графическая часть КР.pdf",
+          "source_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/b43c911d-191d-42e5-a953-810feb9bf2de/pdf_documents/Текстовая и графическая часть КР.pdf",
+          "dest_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/b43c911d-191d-42e5-a953-810feb9bf2de/explanatory_note/Текстовая и графическая часть КР.pdf",
           "category": "explanatory_note",
           "pages_analyzed": 3,
           "file_size": 10400384
