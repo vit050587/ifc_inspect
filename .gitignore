@@ -1,8 +1,13 @@
 ```
-# Compiled Python files
-*.pyc
+# Python
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
 
-# Uploads directory (contains Excel files which might be temporary)
+# Excel files (assuming these are generated/output files)
+*.xlsx
+
+# Uploads directory (if it contains temporary/generated files)
 uploads/
 ```
