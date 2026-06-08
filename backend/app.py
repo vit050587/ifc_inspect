@@ -12,26 +12,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from scripts.files_classifier import classify_and_organize_files
 from scripts.pdf_classifier_llm import classify_pdf_files as classify_pdf_llm
 from scripts.draw_detector import extract_drawings_from_explanatory_note
-from scripts.ifc_viewer import prepare_ifc_for_viewer
 from scripts.ifc_parser import parse_ifc_file
-from scripts.volume_statement_parser import parse_volume_statement_pdfs
 
 # xlsx_parser module was removed - IFC parser now handles materials summary creation
-# parse_and_aggregate_specification is no longer needed since ifc_parser.create_summary_table does this
-# Stub function kept for backward compatibility but not used in process_files anymore
-def parse_and_aggregate_specification(session_folder):
-    """Stub function - materials summary is now created by ifc_parser"""
-    materials_file = os.path.join(session_folder, 'materials_summary.xlsx')
-    if os.path.exists(materials_file):
-        return {
-            'success': True,
-            'source': 'ifc_parser',
-            'output_file': 'materials_summary.xlsx'
-        }
-    return {
-        'success': False,
-        'error': 'xlsx_parser module was removed - materials summary is created from IFC'
-    }
 
 app = Flask(__name__, static_folder='../frontend', static_url_path='')
 CORS(app)
@@ -190,18 +173,7 @@ def process_files():
         
         for ifc_path in ifc_files:
             if os.path.exists(ifc_path):
-                # Step 4a: Prepare IFC for viewer
-                print(f"\n📐 Подготовка IFC для вьюера: {os.path.basename(ifc_path)}")
-                try:
-                    viewer_result = prepare_ifc_for_viewer(ifc_path, session_folder)
-                    ifc_viewer_info.append(viewer_result)
-                    session_info['ifc_viewer_info'] = ifc_viewer_info
-                    print(f"✓ IFC готов для просмотра: {viewer_result.get('filename', 'unknown')}")
-                except Exception as e:
-                    print(f"❌ Ошибка подготовки IFC вьюера: {e}")
-                    session_info['ifc_viewer_error'] = str(e)
-                
-                # Step 4b: Parse IFC file
+                # Step 4: Parse IFC file
                 print(f"\n📊 Парсинг IFC: {os.path.basename(ifc_path)}")
                 try:
                     ifc_result = parse_ifc_file(ifc_path, session_folder)
@@ -213,7 +185,7 @@ def process_files():
     
     # Step 5: Check if materials summary was created by IFC parser
     print("\n" + "="*60)
-    print("📊 ШАГ 5: ПРОВЕРКА СВODНОЙ ТАБЛИЦЫ МАТЕРИАЛОВ (IFC)")
+    print("📊 ШАГ 5: ПРОВЕРКА СВОДНОЙ ТАБЛИЦЫ МАТЕРИАЛОВ (IFC)")
     print("="*60)
     
     try:
@@ -234,21 +206,6 @@ def process_files():
         print(f"❌ Ошибка проверки сводной таблицы: {e}")
         session_info['xlsx_parser_error'] = str(e)
         results['xlsx_parser_results'] = {'success': False, 'error': str(e)}
-    
-    # Step 6: Parse volume statement PDFs and extract material tables
-    print("\n" + "="*60)
-    print("📊 ШАГ 6: ПАРСИНГ ВЕДОМОСТЕЙ ОБЪЕМОВ (PDF)")
-    print("="*60)
-
-    try:
-        volume_results = parse_volume_statement_pdfs(session_folder)
-        results['volume_statement_results'] = volume_results
-        if volume_results.get('success'):
-            session_info['volume_statement_excel_file'] = 'volume_statement_summary.xlsx'
-            print(f"✅ Ведомость объемов из PDF создана: {session_info['volume_statement_excel_file']}")
-    except Exception as e:
-        print(f"❌ Ошибка парсинга ведомостей объемов: {e}")
-        session_info['volume_statement_error'] = str(e)
 
     # Save results
     results_path = os.path.join(session_folder, 'results.json')
@@ -295,32 +252,6 @@ def process_files():
         'xlsx_parser_results': results['xlsx_parser_results'],
         'summary': session_info['results_summary']
     })
-
-
-@app.route('/api/viewer/<session_id>/<path:filename>')
-def serve_ifc_viewer_file(session_id, filename):
-    """Serve IFC or geometry JSON file for the web viewer"""
-    session_folder = os.path.join(UPLOAD_FOLDER, session_id)
-    viewer_folder = os.path.join(session_folder, 'viewer')
-    
-    if not os.path.exists(viewer_folder):
-        return jsonify({'error': 'Viewer folder not found'}), 404
-    
-    file_path = os.path.join(viewer_folder, filename)
-    if not os.path.exists(file_path):
-        return jsonify({'error': 'File not found'}), 404
-    
-    # Determine MIME type based on file extension
-    if filename.lower().endswith('.json'):
-        mimetype = 'application/json'
-    elif filename.lower().endswith('.ifc'):
-        mimetype = 'application/x-step'
-    else:
-        mimetype = 'application/octet-stream'
-    
-    response = send_from_directory(viewer_folder, filename, mimetype=mimetype)
-    response.headers['Content-Type'] = mimetype
-    return response
 
 
 @app.route('/api/download/<session_id>/<filename>')
