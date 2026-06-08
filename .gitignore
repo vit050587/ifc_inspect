@@ -1,10 +1,11 @@
 ```
-# Uploaded files directory
+# Session and upload directories
+test_session/
 uploads/
 
-# Temporary and cache files
+# Temporary files
 *.tmp
-*.swp
+*.temp
 
 # Logs
 *.log
