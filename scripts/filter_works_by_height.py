@@ -150,7 +150,51 @@ def filter_works_by_height(session_folder, source_excel_path=None):
     
     ws_source = wb["ВОР КР+расценки"]
     
-    # Шаг 4: Фильтрация строк
+    # Шаг 4: Сначала собираем все строки в память для предварительной обработки
+    all_rows = list(ws_source.iter_rows(values_only=True))
+    
+    # Шаг 5: Предварительная обработка - заполнение пустых значений столбца A
+    # Алгоритм: проходим по всем строкам и если в столбце A пусто (None),
+    # но строка является вариацией (есть код расценки в столбце G),
+    # то копируем значение A из предыдущей строки той же группы
+    processed_rows = []
+    current_subsection_number = None  # Текущий номер подраздела (например "1", "2", "3.1" и т.д.)
+    
+    for row_idx, row in enumerate(all_rows):
+        row_list = list(row) if row else []
+        
+        # Пропускаем заголовок (первую строку)
+        if row_idx == 0:
+            processed_rows.append(row_list)
+            continue
+        
+        col_a = row_list[0] if len(row_list) > 0 else None
+        col_g = row_list[6] if len(row_list) > 6 else None
+        
+        # Проверяем, является ли строка заголовком раздела или подраздела
+        if col_a and isinstance(col_a, str) and (col_a.startswith('Подраздел') or col_a.startswith('Раздел')):
+            # Сбрасываем текущий номер подраздела
+            current_subsection_number = None
+            processed_rows.append(row_list)
+            continue
+        
+        # Если в столбце A есть значение (номер подраздела)
+        if col_a is not None and col_a != '':
+            current_subsection_number = col_a
+            processed_rows.append(row_list)
+        # Если в столбце A None/пусто, но есть код расценки в G - это вариация
+        elif col_a is None and col_g is not None and col_g != '':
+            # Копируем текущий номер подраздела из предыдущей строки группы
+            new_row = row_list[:]
+            if current_subsection_number is not None:
+                new_row[0] = current_subsection_number
+            processed_rows.append(new_row)
+        else:
+            # Строки без кода расценки (заголовки групп типа "Монтаж/демонтаж опалубки")
+            # Не меняем номер подраздела, просто добавляем
+            processed_rows.append(row_list)
+    
+    # Шаг 6: Фильтрация строк по высоте
     print("\n🔍 Фильтрация строк...")
     
     # Создаем новый workbook для результата
@@ -167,14 +211,14 @@ def filter_works_by_height(session_folder, source_excel_path=None):
             ws_source_other = wb[sheet_name]
             ws_result_other = wb_result.create_sheet(title=sheet_name)
             for row in ws_source_other.iter_rows(values_only=True):
-                ws_result_other.append(row)
+                ws_result_other.append(list(row) if row else [])
             continue
         
         # Копируем стили и данные из исходного листа с фильтрацией
         filtered_row_count = 0
         total_row_count = 0
         
-        for row_idx, row in enumerate(ws_source.iter_rows(values_only=True), 1):
+        for row_idx, row in enumerate(processed_rows, 1):
             total_row_count += 1
             
             # Пропускаем заголовок (первую строку)
@@ -197,11 +241,7 @@ def filter_works_by_height(session_folder, source_excel_path=None):
                 if parse_height_condition(f_value, building_height):
                     ws_result.append(row)
                     filtered_row_count += 1
-                    # Для отладки можно вывести совпадение
-                    # print(f"   ✓ Строка {row_idx}: условие выполнено")
-                else:
-                    pass  # Строка отфильтрована
-                    # print(f"   ✗ Строка {row_idx}: условие НЕ выполнено")
+                # else: строка отфильтрована
             else:
                 # Если нет H в столбце F, копируем строку
                 ws_result.append(row)
@@ -210,10 +250,11 @@ def filter_works_by_height(session_folder, source_excel_path=None):
         print(f"   Обработано строк: {total_row_count - 1}")
         print(f"   Осталось после фильтрации: {filtered_row_count - 1}")
     
-    # Шаг 5: Сохранение результата
+    # Шаг 7: Сохранение результата
     output_path = Path(session_folder) / "Перечень работ КР_new.xlsx"
     
     # Применяем стили (копируем ширины колонок из оригинала)
+    ws_source = wb["ВОР КР+расценки"]
     for col_letter in ws_source.column_dimensions:
         ws_result.column_dimensions[col_letter].width = ws_source.column_dimensions[col_letter].width
     
