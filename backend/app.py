@@ -114,8 +114,8 @@ def process_files():
         'drawing_pages': [],
         'ifc_results': None,
         'pdf_classification': None,
-        'materials_summary': None,
-        'xlsx_parser_results': None
+        'elements_json': None,
+        'elements_json_results': None
     }
     
     # Step 1: Organize files into folders (IFC, Excel, PDF)
@@ -185,29 +185,29 @@ def process_files():
                     print(f"❌ Ошибка парсинга IFC: {e}")
                     session_info['ifc_error'] = str(e)
     
-    # Step 5: Check if materials summary was created by IFC parser
+    # Step 5: Check if elements JSON was created by IFC parser
     print("\n" + "="*60)
-    print("📊 ШАГ 5: ПРОВЕРКА СВОДНОЙ ТАБЛИЦЫ МАТЕРИАЛОВ (IFC)")
+    print("📊 ШАГ 5: ПРОВЕРКА СПИСКА ЭЛЕМЕНТОВ (IFC)")
     print("="*60)
     
     try:
-        materials_file = os.path.join(session_folder, 'materials_summary.xlsx')
-        if os.path.exists(materials_file):
-            # IFC parser already created the materials summary
-            session_info['materials_excel_file'] = 'materials_summary.xlsx'
-            results['xlsx_parser_results'] = {
+        elements_json_file = os.path.join(session_folder, 'elements.json')
+        if os.path.exists(elements_json_file):
+            # IFC parser already created the elements JSON
+            session_info['elements_json_file'] = 'elements.json'
+            results['elements_json_results'] = {
                 'success': True,
                 'source': 'ifc_parser',
-                'output_file': 'materials_summary.xlsx'
+                'output_file': 'elements.json'
             }
-            print(f"✅ Сводная таблица материалов найдена: {session_info['materials_excel_file']}")
+            print(f"✅ Список элементов найден: {session_info['elements_json_file']}")
         else:
-            print("⚠️ Файл materials_summary.xlsx не найден")
-            results['xlsx_parser_results'] = {'success': False, 'error': 'Materials summary not found'}
+            print("⚠️ Файл elements.json не найден")
+            results['elements_json_results'] = {'success': False, 'error': 'Elements JSON not found'}
     except Exception as e:
-        print(f"❌ Ошибка проверки сводной таблицы: {e}")
-        session_info['xlsx_parser_error'] = str(e)
-        results['xlsx_parser_results'] = {'success': False, 'error': str(e)}
+        print(f"❌ Ошибка проверки списка элементов: {e}")
+        session_info['elements_json_error'] = str(e)
+        results['elements_json_results'] = {'success': False, 'error': str(e)}
     
     # Step 6: Filter works list by building height
     print("\n" + "="*60)
@@ -274,7 +274,7 @@ def process_files():
         'drawings_folder_count': session_info.get('drawings_count', 0),
         'ifc_processed': results['ifc_results'] is not None,
         'pdf_classified': results['pdf_classification'] is not None,
-        'xlsx_parsed': results['xlsx_parser_results'] is not None and results['xlsx_parser_results'].get('success', False),
+        'elements_json_saved': results['elements_json_results'] is not None and results['elements_json_results'].get('success', False),
         'mapping_completed': results.get('mapping') is not None and results['mapping'].get('success', False)
     }
     
@@ -289,10 +289,10 @@ def process_files():
         'drawings_count': session_info.get('drawings_count', 0),
         'ifc_processed': results['ifc_results'] is not None,
         'ifc_excel_file': session_info.get('ifc_excel_file'),
-        'materials_excel_file': session_info.get('materials_excel_file'),
+        'elements_json_file': session_info.get('elements_json_file'),
         'mapped_elements_works_file': session_info.get('mapped_elements_works_file'),
         'pdf_classification': results['pdf_classification'],
-        'xlsx_parser_results': results['xlsx_parser_results'],
+        'elements_json_results': results['elements_json_results'],
         'mapping_results': results.get('mapping'),
         'summary': session_info['results_summary']
     })
@@ -337,27 +337,22 @@ def get_results(session_id):
     })
 
 
-@app.route('/api/materials-summary/<session_id>')
-def get_materials_summary(session_id):
-    """Get materials summary data from Excel file"""
-    import openpyxl
+@app.route('/api/elements/<session_id>')
+def get_elements(session_id):
+    """Get elements data from JSON file"""
     
     session_folder = os.path.join(UPLOAD_FOLDER, session_id)
     if not os.path.exists(session_folder):
         return jsonify({'error': 'Session not found'}), 404
     
-    materials_file = os.path.join(session_folder, 'materials_summary.xlsx')
-    if not os.path.exists(materials_file):
-        return jsonify({'error': 'Materials summary not found'}), 404
+    elements_file = os.path.join(session_folder, 'elements.json')
+    if not os.path.exists(elements_file):
+        return jsonify({'error': 'Elements JSON not found'}), 404
     
     try:
-        wb = openpyxl.load_workbook(materials_file, data_only=True)
-        ws = wb.active
-        rows = []
-        for row in ws.iter_rows(values_only=True):
-            rows.append([str(cell) if cell is not None else '' for cell in row])
-        
-        return jsonify({'data': rows})
+        with open(elements_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        return jsonify(data)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
 """
-IFC Extract - Единый скрипт для извлечения данных из IFC и создания сводной таблицы материалов.
+IFC Extract - Единый скрипт для извлечения данных из IFC и сохранения всех элементов.
 Работает внутри папки сессии.
 
 Очередность операций:
 1. extract_ifc_data() - извлекает все данные из IFC файла
-2. create_summary_table() - создает сводную таблицу по типам элементов и материалам
-3. Сохраняет только результирующий файл materials_summary.xlsx в папке сессии
+2. create_full_elements_excel() - сохраняет полный список элементов в Excel
+3. Сохраняет полный список элементов в JSON (elements.json)
+4. Извлекает высоту здания и сохраняет в height.txt
 
-Формат выходной таблицы:
-Тип (RU) | Тип элемента | Материал (с характеристиками: Бетон В30 F150 W6) | Количество, шт | Объем, м³
+Выходные файлы:
+- full_elements.xlsx - полный список элементов со всеми параметрами
+- elements.json - полный список элементов в формате JSON
+- height.txt - высота здания
 """
 
 import ifcopenshell
@@ -1368,10 +1371,8 @@ def parse_ifc_file(ifc_path, output_folder):
     
     Очередность:
     1. Извлекаем данные из IFC (extract_ifc_data)
-    2. Создаем сводную таблицу (create_summary_table)
-    3. Создаем полный список элементов (full_elements.xlsx)
-    4. Извлекаем высоту здания и сохраняем в height.txt
-    5. Сохраняем только materials_summary.xlsx
+    2. Сохраняем полный список элементов в JSON и Excel
+    3. Извлекаем высоту здания и сохраняем в height.txt
     
     Args:
         ifc_path: Path to IFC file
@@ -1395,16 +1396,22 @@ def parse_ifc_file(ifc_path, output_folder):
     ifc_file = ifcopenshell.open(ifc_path)
     building_info = extract_building_info(ifc_file)
     
-    # Шаг 2: Создание сводной таблицы
-    print("\n📊 Шаг 2: Создание сводной таблицы...")
-    summary_df = create_summary_table(data)
-    items = summary_df.to_dict('records')
-    print(f"   ✅ Сформировано {len(items)} строк в сводной таблице")
-    
-    # Шаг 3: Сохранение полного списка элементов
-    print("\n📋 Шаг 3: Сохранение полного списка элементов...")
+    # Шаг 2: Сохранение полного списка элементов в Excel
+    print("\n📋 Шаг 2: Сохранение полного списка элементов...")
     full_elements_path = Path(output_folder) / "full_elements.xlsx"
     create_full_elements_excel(data, str(full_elements_path))
+    
+    # Шаг 3: Сохранение полного списка элементов в JSON
+    print("\n📋 Шаг 3: Сохранение полного списка элементов в JSON...")
+    json_path = Path(output_folder) / "elements.json"
+    with open(json_path, 'w', encoding='utf-8') as f:
+        json.dump({
+            'success': True,
+            'source_file': os.path.basename(ifc_path),
+            'total_elements': len(data),
+            'elements': data
+        }, f, ensure_ascii=False, indent=2, default=str)
+    print(f"   ✅ Сохранено {len(data)} элементов в elements.json")
     
     # Шаг 4: Сохранение высоты здания
     print("\n📏 Шаг 4: Сохранение высоты здания...")
@@ -1418,45 +1425,20 @@ def parse_ifc_file(ifc_path, output_folder):
         print("   ⚠️ Не удалось определить высоту здания")
         height_m = None
     
-    # Шаг 5: Сохранение результирующей сводной таблицы
-    output_path = Path(output_folder) / "materials_summary.xlsx"
-    create_summary_excel(items, str(output_path))
-    
-    # Сохраняем JSON для машинной обработки
-    json_path = Path(output_folder) / "materials_summary.json"
-    with open(json_path, 'w', encoding='utf-8') as f:
-        json.dump({
-            'success': True,
-            'source_file': os.path.basename(ifc_path),
-            'total_items': len(items),
-            'output_excel': 'materials_summary.xlsx',
-            'items': items
-        }, f, ensure_ascii=False, indent=2)
-    
-    # Подсчет статистики
-    total_count = sum(item.get("Количество, шт", 0) for item in items if isinstance(item.get("Количество, шт"), (int, float)))
-    total_volume = sum(float(item.get("Объем, м³", 0)) for item in items if item.get("Объем, м³") != "-" and isinstance(item.get("Объем, м³"), (int, float)))
-    
     result = {
         'success': True,
-        'excel_path': str(output_path),
-        'excel_filename': 'materials_summary.xlsx',
-        'json_path': str(json_path),
-        'total_count': total_count,
-        'total_volume': round(total_volume, 3)
+        'total_elements': len(data),
+        'height_m': height_m,
+        'full_elements_file': 'full_elements.xlsx',
+        'elements_json_file': 'elements.json',
+        'height_file': 'height.txt'
     }
     
     print(f"\n💾 Результаты сохранены в: {output_folder}")
     print(f"   • full_elements.xlsx - полный список элементов")
+    print(f"   • elements.json - полный список элементов (JSON)")
     print(f"   • height.txt - высота здания")
-    print(f"   • materials_summary.xlsx - сводная таблица")
-    print(f"   • materials_summary.json - данные для обработки")
-    print(f"\n✅ Обработка IFC завершена. Всего элементов: {len(data)}, Уникальных материалов: {len(items)}")
-    
-    # Добавляем информацию о высоте и полном списке элементов в результат
-    result['height_m'] = height_m
-    result['full_elements_file'] = 'full_elements.xlsx'
-    result['height_file'] = 'height.txt'
+    print(f"\n✅ Обработка IFC завершена. Всего элементов: {len(data)}")
     
     return result
 
