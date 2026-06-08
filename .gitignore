@@ -1,7 +1,8 @@
-```gitignore
-# Excel files
-*.xlsx
+```
+# Compiled Python files
+*.pyc
+__pycache__/
 
-# Temporary and uploaded files
+# Uploads directory (contains Excel files which might be temporary)
 uploads/
 ```
