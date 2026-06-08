@@ -150,83 +150,10 @@ def filter_works_by_height(session_folder, source_excel_path=None):
     
     ws_source = wb["ВОР КР+расценки"]
     
-    # Шаг 4: Сначала собираем все строки в память для предварительной обработки
+    # Шаг 4: Читаем все строки в память
     all_rows = list(ws_source.iter_rows(values_only=True))
     
-    # Шаг 5: Предварительная обработка - заполнение значений столбцов A, B, C, D
-    # Алгоритм: 
-    # 1. Находим заголовки подразделов (строки начинающиеся с "Подраздел" или "Раздел")
-    # 2. Извлекаем номер подраздела из заголовка (например "1" из "Подраздел 1. ...")
-    # 3. Для первой строки с кодом расценки после заголовка сохраняем значения B, C, D
-    # 4. Все последующие строки до следующего заголовка получают:
-    #    - A = номер подраздела
-    #    - B, C, D = значения из первой строки работы этого подраздела
-    processed_rows = []
-    current_subsection_number = None  # Текущий номер подраздела (например "1", "2", "3.1" и т.д.)
-    current_b_value = None  # Значение столбца B для текущего подраздела
-    current_c_value = None  # Значение столбца C для текущего подраздела
-    current_d_value = None  # Значение столбца D для текущего подраздела
-    first_work_row_in_subsection = True  # Флаг: первая ли это строка работы в подразделе
-    
-    for row_idx, row in enumerate(all_rows):
-        row_list = list(row) if row else []
-        
-        # Пропускаем заголовок (первую строку)
-        if row_idx == 0:
-            processed_rows.append(row_list)
-            continue
-        
-        col_a = row_list[0] if len(row_list) > 0 else None
-        col_g = row_list[6] if len(row_list) > 6 else None
-        
-        # Проверяем, является ли строка заголовком раздела или подраздела
-        if col_a and isinstance(col_a, str) and (col_a.startswith('Подраздел') or col_a.startswith('Раздел')):
-            # Извлекаем номер подраздела из заголовка
-            # Например: "Подраздел 1. Надземная часть здания. Стены" -> "1"
-            # Или: "Раздел 5. Монолитные ж/б конструкции" -> "5"
-            match = re.match(r'(?:Подраздел|Раздел)\s+(\d+(?:\.\d+)?)', col_a)
-            if match:
-                current_subsection_number = match.group(1)
-            else:
-                current_subsection_number = None
-            # Сбрасываем значения B, C, D для нового подраздела
-            current_b_value = None
-            current_c_value = None
-            current_d_value = None
-            first_work_row_in_subsection = True
-            processed_rows.append(row_list)
-            continue
-        
-        # Если есть код расценки в столбце G - это строка работы
-        if col_g is not None and col_g != '':
-            new_row = row_list[:]
-            
-            if current_subsection_number is not None:
-                # Устанавливаем номер подраздела в столбец A
-                new_row[0] = current_subsection_number
-                
-                # Если это первая строка работы в подразделе, запоминаем B, C, D
-                if first_work_row_in_subsection:
-                    current_b_value = new_row[1] if len(new_row) > 1 else None
-                    current_c_value = new_row[2] if len(new_row) > 2 else None
-                    current_d_value = new_row[3] if len(new_row) > 3 else None
-                    first_work_row_in_subsection = False
-                else:
-                    # Для всех последующих строк устанавливаем B, C, D как в первой строке
-                    if len(new_row) > 1:
-                        new_row[1] = current_b_value
-                    if len(new_row) > 2:
-                        new_row[2] = current_c_value
-                    if len(new_row) > 3:
-                        new_row[3] = current_d_value
-            
-            processed_rows.append(new_row)
-        else:
-            # Строки без кода расценки (промежуточные заголовки, пустые строки)
-            # Сохраняем как есть, не сбрасывая current_subsection_number
-            processed_rows.append(row_list)
-    
-    # Шаг 6: Фильтрация строк по высоте
+    # Шаг 5: Фильтрация строк по высоте
     print("\n🔍 Фильтрация строк...")
     
     # Создаем новый workbook для результата
@@ -250,7 +177,7 @@ def filter_works_by_height(session_folder, source_excel_path=None):
         filtered_row_count = 0
         total_row_count = 0
         
-        for row_idx, row in enumerate(processed_rows, 1):
+        for row_idx, row in enumerate(all_rows, 1):
             total_row_count += 1
             
             # Пропускаем заголовок (первую строку)
