@@ -500,24 +500,6 @@
             <div class="response-section" id="resultsSection">
                 <h2>2. Результаты обработки</h2>
                 <div class="response-content">
-                    <div class="results-grid">
-                        <div class="result-card">
-                            <h3>Количество конструктивных элементов</h3>
-                            <div class="value" id="ifcElementsCount">0</div>
-                        </div>
-                        <div class="result-card">
-                            <h3>Количество строительных материалов</h3>
-                            <div class="value" id="materialsCount">0</div>
-                        </div>
-                        <div class="result-card">
-                            <h3>Высота здания</h3>
-                            <div class="value" id="buildingHeight">0</div>
-                        </div>
-                        <div class="result-card" style="grid-column: 1 / -1;">
-                            <h3>Адрес</h3>
-                            <div class="value" id="longName" style="font-size: 16px; max-width: 100%; white-space: normal; word-wrap: break-word; overflow-wrap: break-word;">-</div>
-                        </div>
-                    </div>
                     
                     <!-- Download Materials Summary Section -->
                     <div class="download-section" id="downloadMaterialsSection" style="display: none;">
@@ -788,32 +770,6 @@
                 fetch(`/api/results/${sessionId}`)
                     .then(response => response.json())
                     .then(resultsData => {
-                        if (resultsData.results && resultsData.results.ifc_results) {
-                            const ifcResults = resultsData.results.ifc_results;
-                            document.getElementById('ifcElementsCount').textContent = ifcResults.total_elements || 0;
-                            
-                            // Get materials count from IFC results aggregated_materials
-                            if (ifcResults.aggregated_materials !== undefined) {
-                                document.getElementById('materialsCount').textContent = ifcResults.aggregated_materials || 0;
-                            } else {
-                                // Fallback to xlsx_parser_results or materials_count
-                                const xlsxResults = resultsData.results.xlsx_parser_results;
-                                if (xlsxResults && xlsxResults.success && xlsxResults.aggregated_materials) {
-                                    document.getElementById('materialsCount').textContent = xlsxResults.aggregated_materials || 0;
-                                } else {
-                                    document.getElementById('materialsCount').textContent = ifcResults.materials_count || 0;
-                                }
-                            }
-                            
-                            // Get project info for stories, height, longName
-                            const projectInfo = ifcResults.project_info;
-                            if (projectInfo) {
-                                // Fetch building height and address from building_info.json
-                                fetchBuildingHeight();
-                                fetchBuildingAddress();
-                            }
-                        }
-                        
                         // Load IFC viewer info (but don't display it yet as per requirements)
                         if (resultsData.session_info && resultsData.session_info.ifc_viewer_info) {
                             ifcViewerInfo = resultsData.session_info.ifc_viewer_info[0];
@@ -1324,36 +1280,6 @@
                 });
             } catch (error) {
                 console.error('Error loading materials table:', error);
-            }
-        }
-        
-        async function fetchBuildingHeight() {
-            try {
-                const response = await fetch(`/api/building-height/${sessionId}`);
-                if (!response.ok) return;
-                
-                const data = await response.json();
-                if (data.height !== undefined && data.height !== null) {
-                    // Height is already in meters from building_info.json
-                    let heightValue = data.height + ' м';
-                    document.getElementById('buildingHeight').textContent = heightValue;
-                }
-            } catch (error) {
-                console.error('Error fetching building height:', error);
-            }
-        }
-        
-        async function fetchBuildingAddress() {
-            try {
-                const response = await fetch(`/api/building-address/${sessionId}`);
-                if (!response.ok) return;
-                
-                const data = await response.json();
-                if (data.address !== undefined && data.address !== null) {
-                    document.getElementById('longName').textContent = data.address;
-                }
-            } catch (error) {
-                console.error('Error fetching building address:', error);
             }
         }
         
