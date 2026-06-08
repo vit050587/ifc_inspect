@@ -48,31 +48,31 @@ def extract_parameters_from_element(element_row):
     
     # Наименование
     name = element_row.get('Наименование', '') or ''
-    params['name'] = str(name).upper() if name else ''
+    params['name'] = str(name).upper() if name is not None else ''
     
     # Категория (из classify_element)
     category = element_row.get('category', '') or ''
-    params['category'] = str(category).upper() if category else ''
+    params['category'] = str(category).upper() if category is not None else ''
     
     # Материал
     material = element_row.get('Материал', '') or ''
-    params['material'] = str(material).upper() if material else ''
+    params['material'] = str(material).upper() if material is not None else ''
     
     # Характеристики материала
     char_str = element_row.get('Характеристики материала', '') or ''
     if char_str:
         # Класс бетона (B30, B25, B35, B7.5 и т.д.)
-        class_match = re.search(r'[BВ]\s?(\d+(?:[.,]\d+)?)', char_str.upper())
+        class_match = re.search(r'[BВ]\s?(\d+(?:[.,]\d+)?)', str(char_str).upper())
         if class_match:
             params['concrete_class'] = class_match.group(1).replace(',', '.')
         
         # Морозостойкость (F150, F100 и т.д.)
-        frost_match = re.search(r'F(\d+)', char_str.upper())
+        frost_match = re.search(r'F(\d+)', str(char_str).upper())
         if frost_match:
             params['frost'] = frost_match.group(1)
         
         # Водонепроницаемость (W6, W8 и т.д.)
-        water_match = re.search(r'W(\d+)', char_str.upper())
+        water_match = re.search(r'W(\d+)', str(char_str).upper())
         if water_match:
             params['water'] = water_match.group(1)
     
@@ -124,15 +124,15 @@ def extract_parameters_from_work(work_row):
     
     # Столбец B - Наименование работ
     work_name = work_row.get('Наименование работ', '') or ''
-    params['work_name'] = str(work_name).upper() if work_name else ''
+    params['work_name'] = str(work_name).upper() if work_name is not None else ''
     
     # Столбец E - Формула расчёта
     formula = work_row.get('Формула расчёта объёмов работ и расхода материалов', '') or ''
-    params['formula'] = str(formula).upper() if formula else ''
+    params['formula'] = str(formula).upper() if formula is not None else ''
     
     # Столбец F - Параметризация
     parameters = work_row.get('Параметризация', '') or ''
-    params['parameters'] = str(parameters).upper() if parameters else ''
+    params['parameters'] = str(parameters).upper() if parameters is not None else ''
     
     # Объединяем текст для парсинга
     combined_text = f"{params['work_name']} {params['parameters']}"
@@ -260,8 +260,8 @@ def check_element_work_match(element_params, work_params):
     
     # 3. Проверка категории элемента vs наименования работы
     max_score += 3
-    elem_cat = element_params.get('category', '').upper()
-    work_name = work_params.get('work_name', '').upper()
+    elem_cat = str(element_params.get('category', '') or '').upper()
+    work_name = str(work_params.get('work_name', '') or '').upper()
     
     category_keywords = {
         'СТЕНА': ['СТЕН', 'WALL'],
