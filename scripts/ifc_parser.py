@@ -1240,36 +1240,8 @@ def parse_ifc_file(ifc_path, output_folder):
     data = extract_ifc_data(ifc_path)
     print(f"   ✅ Извлечено {len(data)} элементов")
     
-    # Шаг 1.5: Извлечение информации о здании
-    print("\n🏢 Шаг 1.5: Извлечение информации об объекте строительства...")
-    try:
-        ifc_file_for_building = ifcopenshell.open(ifc_path)
-        building_info = extract_building_info(ifc_file_for_building)
-        
-        # Сохраняем building_info.json в папке сессии
-        building_json_path = Path(output_folder) / "building_info.json"
-        with open(building_json_path, 'w', encoding='utf-8') as f:
-            json.dump({
-                'success': True,
-                'source_file': os.path.basename(ifc_path),
-                'project': building_info.get('project', {}),
-                'building': building_info.get('building', {}),
-                'storeys': building_info.get('storeys', []),
-                'summary': building_info.get('summary', {})
-            }, f, ensure_ascii=False, indent=2)
-        
-        summary = building_info.get('summary', {})
-        print(f"   ✅ Информация об объекте:")
-        if summary.get('address'):
-            print(f"      Адрес: {summary['address']}")
-        if summary.get('total_height_from_zero_m'):
-            print(f"      Высота от нулевой отметки: {summary['total_height_from_zero_m']} м")
-        if summary.get('above_ground_storeys') is not None:
-            print(f"      Этажность: {summary['above_ground_storeys']} надземных + {summary.get('below_ground_storeys', 0)} подземных")
-        print(f"   ✅ building_info.json сохранен")
-    except Exception as e:
-        print(f"   ⚠️ Не удалось извлечь информацию об объекте: {e}")
-        building_info = None
+    # Шаг 1.5: Извлечение информации о здании (удалено, так как не используется в UI)
+    building_info = None
     
     # Шаг 2: Создание сводной таблицы
     print("\n📊 Шаг 2: Создание сводной таблицы...")
@@ -1301,8 +1273,6 @@ def parse_ifc_file(ifc_path, output_folder):
         'excel_path': str(output_path),
         'excel_filename': 'materials_summary.xlsx',
         'json_path': str(json_path),
-        'total_elements': len(data),
-        'aggregated_materials': len(items),
         'total_count': total_count,
         'total_volume': round(total_volume, 3)
     }
@@ -1310,8 +1280,6 @@ def parse_ifc_file(ifc_path, output_folder):
     print(f"\n💾 Результаты сохранены в: {output_folder}")
     print(f"   • materials_summary.xlsx - сводная таблица")
     print(f"   • materials_summary.json - данные для обработки")
-    if building_info:
-        print(f"   • building_info.json - информация об объекте строительства")
     print(f"\n✅ Обработка IFC завершена. Всего элементов: {len(data)}, Уникальных материалов: {len(items)}")
     
     return result

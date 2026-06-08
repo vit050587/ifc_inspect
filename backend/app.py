@@ -26,13 +26,11 @@ def parse_and_aggregate_specification(session_folder):
         return {
             'success': True,
             'source': 'ifc_parser',
-            'output_file': 'materials_summary.xlsx',
-            'aggregated_materials': 0  # Will be populated from results.json
+            'output_file': 'materials_summary.xlsx'
         }
     return {
         'success': False,
-        'error': 'xlsx_parser module was removed - materials summary is created from IFC',
-        'aggregated_materials': 0
+        'error': 'xlsx_parser module was removed - materials summary is created from IFC'
     }
 
 app = Flask(__name__, static_folder='../frontend', static_url_path='')
@@ -284,11 +282,6 @@ def process_files():
     with open(session_info_path, 'w', encoding='utf-8') as f:
         json.dump(session_info, f, ensure_ascii=False, indent=2)
     
-    # Get aggregated_materials count from IFC results if available
-    aggregated_materials = 0
-    if results.get('ifc_results') and results['ifc_results'].get('aggregated_materials'):
-        aggregated_materials = results['ifc_results']['aggregated_materials']
-    
     return jsonify({
         'success': True,
         'session_id': session_id,
@@ -300,8 +293,6 @@ def process_files():
         'materials_excel_file': session_info.get('materials_excel_file'),
         'pdf_classification': results['pdf_classification'],
         'xlsx_parser_results': results['xlsx_parser_results'],
-        'ifc_results': results.get('ifc_results'),  # Add IFC results for materials count
-        'aggregated_materials': aggregated_materials,
         'summary': session_info['results_summary']
     })
 
@@ -392,60 +383,6 @@ def get_materials_summary(session_id):
             rows.append([str(cell) if cell is not None else '' for cell in row])
         
         return jsonify({'data': rows})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/building-height/<session_id>')
-def get_building_height(session_id):
-    """Get building height from building_info.json file"""
-    
-    session_folder = os.path.join(UPLOAD_FOLDER, session_id)
-    if not os.path.exists(session_folder):
-        return jsonify({'error': 'Session not found'}), 404
-    
-    building_info_file = os.path.join(session_folder, 'building_info.json')
-    if not os.path.exists(building_info_file):
-        return jsonify({'error': 'Building info not found'}), 404
-    
-    try:
-        with open(building_info_file, 'r', encoding='utf-8') as f:
-            building_info = json.load(f)
-        
-        # Get height from summary.total_height_from_zero_m
-        height = building_info.get('summary', {}).get('total_height_from_zero_m')
-        
-        if height is not None:
-            return jsonify({'height': height})
-        else:
-            return jsonify({'height': None})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/building-address/<session_id>')
-def get_building_address(session_id):
-    """Get building address from building_info.json file"""
-    
-    session_folder = os.path.join(UPLOAD_FOLDER, session_id)
-    if not os.path.exists(session_folder):
-        return jsonify({'error': 'Session not found'}), 404
-    
-    building_info_file = os.path.join(session_folder, 'building_info.json')
-    if not os.path.exists(building_info_file):
-        return jsonify({'error': 'Building info not found'}), 404
-    
-    try:
-        with open(building_info_file, 'r', encoding='utf-8') as f:
-            building_info = json.load(f)
-        
-        # Get address from summary.address
-        address = building_info.get('summary', {}).get('address')
-        
-        if address is not None:
-            return jsonify({'address': address})
-        else:
-            return jsonify({'address': None})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
