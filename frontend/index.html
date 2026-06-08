@@ -421,33 +421,6 @@
                 <h2>2. Результаты обработки</h2>
                 <div class="response-content">
                     
-                    <!-- Download Materials Summary Section -->
-                    <div class="download-section" id="downloadMaterialsSection" style="display: none;">
-                        <button class="download-btn" id="downloadMaterialsBtn" onclick="downloadMaterials()" style="background: #3498db;">
-                            📥 Скачать сводку материалов
-                        </button>
-                    </div>
-                    
-                    <!-- Materials Summary Table Preview -->
-                    <div class="pages-info" id="materialsTableSection" style="display: none;">
-                        <h3 style="margin: 20px 0 15px; color: #2c3e50;">📊 Просмотр сводки материалов</h3>
-                        <div style="overflow-x: auto; max-height: 400px; overflow-y: auto;">
-                            <table class="pages-table">
-                                <thead>
-                                    <tr>
-                                        <th>Тип (RU)</th>
-                                        <th>Тип элемента</th>
-                                        <th>Материал</th>
-                                        <th>Количество, шт</th>
-                                        <th>Объем, м³</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="materialsTableBody">
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    
                     <!-- Download Mapped Elements Works Section -->
                     <div class="download-section" id="downloadMappedSection" style="display: none;">
                         <button class="download-btn" id="downloadMappedBtn" onclick="downloadMappedElementsWorks()" style="background: #9b59b6;">
@@ -616,8 +589,6 @@
         
         function displayResults(data) {
             const resultsSection = document.getElementById('resultsSection');
-            const downloadMaterialsSection = document.getElementById('downloadMaterialsSection');
-            const materialsTableSection = document.getElementById('materialsTableSection');
             const downloadMappedSection = document.getElementById('downloadMappedSection');
             const mappedTableSection = document.getElementById('mappedTableSection');
             
@@ -628,27 +599,19 @@
                 fetch(`/api/results/${sessionId}`)
                     .then(response => response.json())
                     .then(resultsData => {
-                        // Load materials summary table
-                        loadMaterialsTable();
-                        // Load mapped elements works table
+                        // Load mapped elements works table (main result)
                         loadMappedElementsWorksTable();
                     })
                     .catch(err => console.error('Error loading detailed results:', err));
             }
             
-            // Show download button for materials summary Excel
-            if (data.materials_excel_file) {
-                downloadMaterialsSection.style.display = 'block';
-                materialsTableSection.style.display = 'block';
-            }
-            
-            // Show download button for mapped elements works Excel
+            // Show download button and table for mapped elements works Excel (main result)
             if (data.mapped_elements_works_file) {
                 downloadMappedSection.style.display = 'block';
                 mappedTableSection.style.display = 'block';
             }
             
-            // Pages info table removed - only materials table is displayed
+            // Pages info table removed - only mapped elements table is displayed
             
             resultsSection.classList.add('active');
         }
@@ -1103,52 +1066,6 @@
             `;
             
             viewerInfoDiv.style.display = 'block';
-        }
-        
-        async function loadMaterialsTable() {
-            try {
-                const response = await fetch(`/api/results/${sessionId}`);
-                const data = await response.json();
-                
-                const tbody = document.getElementById('materialsTableBody');
-                tbody.innerHTML = '';
-                
-                // Load materials summary from Excel file
-                if (!sessionId) return;
-                
-                // Fetch materials summary data from backend
-                const materialsResponse = await fetch(`/api/materials-summary/${sessionId}`);
-                if (!materialsResponse.ok) return;
-                
-                const materialsData = await materialsResponse.json();
-                const rows = materialsData.data || [];
-                
-                rows.forEach((row, index) => {
-                    // Skip header row (index 0)
-                    if (index === 0) return;
-                    
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td>${row[0] || ''}</td>
-                        <td>${row[1] || ''}</td>
-                        <td>${row[2] || ''}</td>
-                        <td>${row[3] || ''}</td>
-                        <td>${row[4] || ''}</td>
-                    `;
-                    tbody.appendChild(tr);
-                });
-            } catch (error) {
-                console.error('Error loading materials table:', error);
-            }
-        }
-        
-        function downloadMaterials() {
-            if (!sessionId) {
-                showError('Сессия не найдена');
-                return;
-            }
-            
-            window.location.href = `/api/download/${sessionId}/materials_summary.xlsx`;
         }
         
         async function loadMappedElementsWorksTable() {
