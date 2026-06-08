@@ -771,22 +771,30 @@ def main(session_folder=None):
     # Загружаем и подготавливаем работы
     df_works_valid, works_by_ifc, works_universal = load_and_prepare_works(works_file)
     
+    # Оптимизация: предварительно фильтруем элементы без работ
+    print("\nПредварительная фильтрация элементов...")
+    valid_element_indices = []
+    for idx in range(len(df_elements)):
+        element_row = df_elements.iloc[idx]
+        params = get_element_parameters(element_row)
+        if not params['no_works'] and params['ifc_class']:
+            valid_element_indices.append(idx)
+    
+    print(f"Элементов для обработки: {len(valid_element_indices)}")
+    
     # Обрабатываем элементы
     results = []
     elements_with_works = set()
     elements_without_works = set()
     
     print("\nПодбор видов работ для элементов...")
-    for idx, element_row in df_elements.iterrows():
-        if idx % 500 == 0:
-            print(f"Обработано {idx} из {len(df_elements)} элементов...")
+    total = len(valid_element_indices)
+    for batch_idx, idx in enumerate(valid_element_indices):
+        if batch_idx % 200 == 0:
+            print(f"Обработано {batch_idx} из {total} элементов...")
         
+        element_row = df_elements.iloc[idx]
         element_params = get_element_parameters(element_row)
-        
-        # Если элемент без работ, пропускаем его
-        if element_params['no_works']:
-            elements_without_works.add(idx)
-            continue
         
         # Находим подходящие работы
         matched_works = find_works_for_element(
@@ -822,6 +830,11 @@ def main(session_folder=None):
                 results.append(result)
         else:
             # Элемент не имеет подходящих работ (нет в таблице работ)
+            elements_without_works.add(idx)
+    
+    # Добавляем исключенные элементы
+    for idx in range(len(df_elements)):
+        if idx not in valid_element_indices:
             elements_without_works.add(idx)
     
     # Создаем DataFrame с результатами
