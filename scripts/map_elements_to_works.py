@@ -721,6 +721,16 @@ def load_and_prepare_works(works_file: str) -> Tuple[pd.DataFrame, Dict, pd.Data
     return df_works_valid, works_by_ifc, works_universal
 
 
+def map_elements_to_works(session_folder=None):
+    """Функция для подбора видов работ к элементам (точка входа для Flask)"""
+    try:
+        result = main(session_folder)
+        return result
+    except Exception as e:
+        print(f"Ошибка при маппинге элементов к работам: {e}")
+        return {'success': False, 'error': str(e)}
+
+
 def main(session_folder=None):
     # Пути к файлам - используем аргументы командной строки или значения по умолчанию
     if len(sys.argv) >= 4:
@@ -740,12 +750,14 @@ def main(session_folder=None):
     
     # Проверяем существование файлов
     if not os.path.exists(elements_file):
-        print(f"Ошибка: файл элементов не найден: {elements_file}")
-        sys.exit(1)
+        error_msg = f"Ошибка: файл элементов не найден: {elements_file}"
+        print(error_msg)
+        return {'success': False, 'error': error_msg}
     
     if not os.path.exists(works_file):
-        print(f"Ошибка: файл работ не найден: {works_file}")
-        sys.exit(1)
+        error_msg = f"Ошибка: файл работ не найден: {works_file}"
+        print(error_msg)
+        return {'success': False, 'error': error_msg}
     
     print("=" * 60)
     print("Подбор видов работ к элементам (версия 2)")
@@ -862,6 +874,15 @@ def main(session_folder=None):
     print("\n" + "=" * 60)
     print("Работа завершена успешно!")
     print("=" * 60)
+    
+    return {
+        'success': True,
+        'output_file': os.path.basename(output_file),
+        'total_elements': len(df_elements),
+        'matched_elements': len(elements_with_works),
+        'elements_without_works': len(elements_without_works),
+        'total_matches': len(df_results)
+    }
 
 
 if __name__ == '__main__':
@@ -869,9 +890,13 @@ if __name__ == '__main__':
     
     if len(sys.argv) >= 2:
         session_folder = sys.argv[1]
-        main(session_folder)
+        result = main(session_folder)
+        if not result.get('success'):
+            sys.exit(1)
     else:
         print("Использование: python map_elements_to_works.py <session_folder>")
         print("Пример: python map_elements_to_works.py /workspace/uploads/session_id")
         # Для обратной совместимости запускаем без аргументов
-        main()
+        result = main()
+        if result and not result.get('success'):
+            sys.exit(1)
