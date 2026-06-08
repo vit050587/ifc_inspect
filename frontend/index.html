@@ -447,6 +447,33 @@
                             </table>
                         </div>
                     </div>
+                    
+                    <!-- Download Mapped Elements Works Section -->
+                    <div class="download-section" id="downloadMappedSection" style="display: none;">
+                        <button class="download-btn" id="downloadMappedBtn" onclick="downloadMappedElementsWorks()" style="background: #9b59b6;">
+                            📥 Скачать маппинг элементов к работам
+                        </button>
+                    </div>
+                    
+                    <!-- Mapped Elements Works Table Preview -->
+                    <div class="pages-info" id="mappedTableSection" style="display: none;">
+                        <h3 style="margin: 20px 0 15px; color: #2c3e50;">🔗 Маппинг элементов к работам</h3>
+                        <div style="overflow-x: auto; max-height: 500px; overflow-y: auto;">
+                            <table class="pages-table">
+                                <thead>
+                                    <tr>
+                                        <th>Элемент IFC</th>
+                                        <th>№ п/п работы</th>
+                                        <th>Наименование работ</th>
+                                        <th>Ед. изм</th>
+                                        <th>Оценка соответствия</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="mappedTableBody">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -591,6 +618,8 @@
             const resultsSection = document.getElementById('resultsSection');
             const downloadMaterialsSection = document.getElementById('downloadMaterialsSection');
             const materialsTableSection = document.getElementById('materialsTableSection');
+            const downloadMappedSection = document.getElementById('downloadMappedSection');
+            const mappedTableSection = document.getElementById('mappedTableSection');
             
             // text_pages_count and drawing_pages_count are no longer displayed in the UI
             
@@ -601,6 +630,8 @@
                     .then(resultsData => {
                         // Load materials summary table
                         loadMaterialsTable();
+                        // Load mapped elements works table
+                        loadMappedElementsWorksTable();
                     })
                     .catch(err => console.error('Error loading detailed results:', err));
             }
@@ -609,6 +640,12 @@
             if (data.materials_excel_file) {
                 downloadMaterialsSection.style.display = 'block';
                 materialsTableSection.style.display = 'block';
+            }
+            
+            // Show download button for mapped elements works Excel
+            if (data.mapped_elements_works_file) {
+                downloadMappedSection.style.display = 'block';
+                mappedTableSection.style.display = 'block';
             }
             
             // Pages info table removed - only materials table is displayed
@@ -1112,6 +1149,51 @@
             }
             
             window.location.href = `/api/download/${sessionId}/materials_summary.xlsx`;
+        }
+        
+        async function loadMappedElementsWorksTable() {
+            if (!sessionId) return;
+            
+            try {
+                const response = await fetch(`/api/mapped-elements/${sessionId}`);
+                if (!response.ok) {
+                    console.log('Mapped elements table not available yet');
+                    return;
+                }
+                
+                const data = await response.json();
+                const tbody = document.getElementById('mappedTableBody');
+                tbody.innerHTML = '';
+                
+                if (data.data && data.data.length > 0) {
+                    // Skip header row if present
+                    const startIndex = data.data[0] && data.data[0][0] === 'Элемент IFC' ? 1 : 0;
+                    
+                    for (let i = startIndex; i < data.data.length && i < 100; i++) {
+                        const row = data.data[i];
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td>${row[0] || ''}</td>
+                            <td>${row[1] || ''}</td>
+                            <td>${row[2] || ''}</td>
+                            <td>${row[3] || ''}</td>
+                            <td>${row[4] !== null && row[4] !== undefined ? row[4] : ''}</td>
+                        `;
+                        tbody.appendChild(tr);
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading mapped elements table:', error);
+            }
+        }
+        
+        function downloadMappedElementsWorks() {
+            if (!sessionId) {
+                showError('Сессия не найдена');
+                return;
+            }
+            
+            window.location.href = `/api/download/${sessionId}/mapped_elements_works.xlsx`;
         }
         
         function showError(message) {

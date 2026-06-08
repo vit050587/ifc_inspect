@@ -13,6 +13,8 @@ from scripts.files_classifier import classify_and_organize_files
 from scripts.pdf_classifier_llm import classify_pdf_files as classify_pdf_llm
 from scripts.draw_detector import extract_drawings_from_explanatory_note
 from scripts.ifc_parser import parse_ifc_file
+from scripts.filter_works_by_height import filter_works_by_height
+from scripts.map_elements_to_works import map_elements_to_works
 
 # xlsx_parser module was removed - IFC parser now handles materials summary creation
 
@@ -206,6 +208,45 @@ def process_files():
         print(f"❌ Ошибка проверки сводной таблицы: {e}")
         session_info['xlsx_parser_error'] = str(e)
         results['xlsx_parser_results'] = {'success': False, 'error': str(e)}
+    
+    # Step 6: Filter works list by building height
+    print("\n" + "="*60)
+    print("📐 ШАГ 6: ФИЛЬТРАЦИЯ ПЕРЕЧНЯ РАБОТ ПО ВЫСОТЕ ЗДАНИЯ")
+    print("="*60)
+    
+    try:
+        height_filter_result = filter_works_by_height(session_folder)
+        if height_filter_result.get('success'):
+            results['height_filter'] = height_filter_result
+            session_info['works_list_filtered'] = True
+            session_info['works_list_output_file'] = height_filter_result.get('output_file')
+            print(f"✅ Перечень работ отфильтрован: {height_filter_result.get('output_file')}")
+        else:
+            print(f"⚠️ Фильтрация не выполнена: {height_filter_result.get('error', 'Unknown error')}")
+            session_info['height_filter_error'] = height_filter_result.get('error', 'Unknown error')
+    except Exception as e:
+        print(f"❌ Ошибка фильтрации перечня работ: {e}")
+        session_info['height_filter_error'] = str(e)
+
+    # Step 7: Map elements to works
+    print("\n" + "="*60)
+    print("🔗 ШАГ 7: МАППИНГ ЭЛЕМЕНТОВ К РАБОТАМ")
+    print("="*60)
+    
+    try:
+        mapping_result = map_elements_to_works(session_folder)
+        if mapping_result.get('success'):
+            results['mapping'] = mapping_result
+            session_info['mapping_completed'] = True
+            session_info['mapped_elements_works_file'] = mapping_result.get('output_file')
+            print(f"✅ Маппинг завершен: {mapping_result.get('output_file')}")
+            print(f"   Смаппировано {mapping_result.get('matched_elements', 0)} из {mapping_result.get('total_elements', 0)} элементов")
+        else:
+            print(f"⚠️ Маппинг не выполнен: {mapping_result.get('error', 'Unknown error')}")
+            session_info['mapping_error'] = mapping_result.get('error', 'Unknown error')
+    except Exception as e:
+        print(f"❌ Ошибка маппинга: {e}")
+        session_info['mapping_error'] = str(e)
 
     # Save results
     results_path = os.path.join(session_folder, 'results.json')
@@ -233,7 +274,8 @@ def process_files():
         'drawings_folder_count': session_info.get('drawings_count', 0),
         'ifc_processed': results['ifc_results'] is not None,
         'pdf_classified': results['pdf_classification'] is not None,
-        'xlsx_parsed': results['xlsx_parser_results'] is not None and results['xlsx_parser_results'].get('success', False)
+        'xlsx_parsed': results['xlsx_parser_results'] is not None and results['xlsx_parser_results'].get('success', False),
+        'mapping_completed': results.get('mapping') is not None and results['mapping'].get('success', False)
     }
     
     with open(session_info_path, 'w', encoding='utf-8') as f:
@@ -248,8 +290,10 @@ def process_files():
         'ifc_processed': results['ifc_results'] is not None,
         'ifc_excel_file': session_info.get('ifc_excel_file'),
         'materials_excel_file': session_info.get('materials_excel_file'),
+        'mapped_elements_works_file': session_info.get('mapped_elements_works_file'),
         'pdf_classification': results['pdf_classification'],
         'xlsx_parser_results': results['xlsx_parser_results'],
+        'mapping_results': results.get('mapping'),
         'summary': session_info['results_summary']
     })
 
@@ -308,6 +352,31 @@ def get_materials_summary(session_id):
     
     try:
         wb = openpyxl.load_workbook(materials_file, data_only=True)
+        ws = wb.active
+        rows = []
+        for row in ws.iter_rows(values_only=True):
+            rows.append([str(cell) if cell is not None else '' for cell in row])
+        
+        return jsonify({'data': rows})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/mapped-elements/<session_id>')
+def get_mapped_elements(session_id):
+    """Get mapped elements works data from Excel file"""
+    import openpyxl
+    
+    session_folder = os.path.join(UPLOAD_FOLDER, session_id)
+    if not os.path.exists(session_folder):
+        return jsonify({'error': 'Session not found'}), 404
+    
+    mapped_file = os.path.join(session_folder, 'mapped_elements_works.xlsx')
+    if not os.path.exists(mapped_file):
+        return jsonify({'error': 'Mapped elements file not found'}), 404
+    
+    try:
+        wb = openpyxl.load_workbook(mapped_file, data_only=True)
         ws = wb.active
         rows = []
         for row in ws.iter_rows(values_only=True):
