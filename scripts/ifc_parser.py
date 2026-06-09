@@ -309,283 +309,33 @@ def get_property_value(psets, pset_name, prop_name):
 
 
 def extract_element_properties(element, psets):
-    """Извлечь все свойства элемента согласно REQUIRED_COLUMNS"""
+    """Извлечь все свойства элемента - только те, что есть в модели"""
     data = {}
     
-    # Element Specific properties
-    data["Element Specific:GlobalId"] = getattr(element, 'GlobalId', None)
-    data["Element Specific:LongName"] = getattr(element, 'LongName', None)
-    data["Element Specific:Name"] = getattr(element, 'Name', None)
-    data["Element Specific:ObjectType"] = getattr(element, 'ObjectType', None)
-    data["Element Specific:PredefinedType"] = getattr(element, 'PredefinedType', None)
-    data["Element Specific:Tag"] = getattr(element, 'Tag', None)
+    # Element Specific properties (базовые атрибуты элемента)
+    if getattr(element, 'GlobalId', None):
+        data["Element Specific:GlobalId"] = getattr(element, 'GlobalId', None)
+    if getattr(element, 'LongName', None):
+        data["Element Specific:LongName"] = getattr(element, 'LongName', None)
+    if getattr(element, 'Name', None):
+        data["Element Specific:Name"] = getattr(element, 'Name', None)
+    if getattr(element, 'ObjectType', None):
+        data["Element Specific:ObjectType"] = getattr(element, 'ObjectType', None)
+    if getattr(element, 'PredefinedType', None):
+        data["Element Specific:PredefinedType"] = getattr(element, 'PredefinedType', None)
+    if getattr(element, 'Tag', None):
+        data["Element Specific:Tag"] = getattr(element, 'Tag', None)
     
-    # ExpCheckBuilding
-    data["ExpCheckBuilding:MGE_BuildingAddress"] = get_property_value(psets, "ExpCheck_Building", "MGE_BuildingAddress")
-    data["ExpCheckBuilding:MGE_Customer"] = get_property_value(psets, "ExpCheck_Building", "MGE_Customer")
-    data["ExpCheckBuilding:MGE_Designer"] = get_property_value(psets, "ExpCheck_Building", "MGE_Designer")
-    data["ExpCheckBuilding:MGE_ElevationOfRefHeight"] = get_property_value(psets, "ExpCheck_Building", "MGE_ElevationOfRefHeight")
-    data["ExpCheckBuilding:MGE_ElevationOfTerrain"] = get_property_value(psets, "ExpCheck_Building", "MGE_ElevationOfTerrain")
-    data["ExpCheckBuilding:MGE_FunctionalUse"] = get_property_value(psets, "ExpCheck_Building", "MGE_FunctionalUse")
-    data["ExpCheckBuilding:MGE_Korpus"] = get_property_value(psets, "ExpCheck_Building", "MGE_Korpus")
-    data["ExpCheckBuilding:MGE_NumOfSection"] = get_property_value(psets, "ExpCheck_Building", "MGE_NumOfSection")
-    data["ExpCheckBuilding:MGE_ObjectName"] = get_property_value(psets, "ExpCheck_Building", "MGE_ObjectName")
-    data["ExpCheckBuilding:MGE_ProjectCode"] = get_property_value(psets, "ExpCheck_Building", "MGE_ProjectCode")
-    data["ExpCheckBuilding:MGE_ProjectName"] = get_property_value(psets, "ExpCheck_Building", "MGE_ProjectName")
-    data["ExpCheckBuilding:MGE_Section"] = get_property_value(psets, "ExpCheck_Building", "MGE_Section")
-    
-    # ExpCheckBuildingStorey
-    data["ExpCheckBuildingStorey:MGE_ComfortLevel"] = get_property_value(psets, "ExpCheck_BuildingStorey", "MGE_ComfortLevel")
-    
-    # ExpCheck_Assembly
-    data["ExpCheck_Assembly:MGE_AssemblyPlace"] = get_property_value(psets, "ExpCheck_Assembly", "MGE_AssemblyPlace")
-    data["ExpCheck_Assembly:MGE_Gost"] = get_property_value(psets, "ExpCheck_Assembly", "MGE_Gost")
-    data["ExpCheck_Assembly:MGE_IsExternal"] = get_property_value(psets, "ExpCheck_Assembly", "MGE_IsExternal")
-    data["ExpCheck_Assembly:MGE_Name"] = get_property_value(psets, "ExpCheck_Assembly", "MGE_Name")
-    data["ExpCheck_Assembly:MGE_Position"] = get_property_value(psets, "ExpCheck_Assembly", "MGE_Position")
-    
-    # ExpCheck_Beam
-    data["ExpCheck_Beam:MGE_BeamType"] = get_property_value(psets, "ExpCheck_Beam", "MGE_BeamType")
-    data["ExpCheck_Beam:MGE_ElementCode"] = get_property_value(psets, "ExpCheck_Beam", "MGE_ElementCode")
-    data["ExpCheck_Beam:MGE_Gost"] = get_property_value(psets, "ExpCheck_Beam", "MGE_Gost")
-    data["ExpCheck_Beam:MGE_Material"] = get_property_value(psets, "ExpCheck_Beam", "MGE_Material")
-    data["ExpCheck_Beam:MGE_MaterialCode"] = get_property_value(psets, "ExpCheck_Beam", "MGE_MaterialCode")
-    data["ExpCheck_Beam:MGE_Name"] = get_property_value(psets, "ExpCheck_Beam", "MGE_Name")
-    data["ExpCheck_Beam:MGE_Position"] = get_property_value(psets, "ExpCheck_Beam", "MGE_Position")
-    data["ExpCheck_Beam:MGE_SeriaNumber"] = get_property_value(psets, "ExpCheck_Beam", "MGE_SeriaNumber")
-    data["ExpCheck_Beam:MGE_SteelGrade"] = get_property_value(psets, "ExpCheck_Beam", "MGE_SteelGrade")
-    
-    # ExpCheck_BeamReinforcement
-    data["ExpCheck_BeamReinforcement:ReinforceStrengthClass"] = get_property_value(psets, "ExpCheck_BeamReinforcement", "ReinforceStrengthClass")
-    
-    # ExpCheck_Column
-    data["ExpCheck_Column:MGE_ColumnType"] = get_property_value(psets, "ExpCheck_Column", "MGE_ColumnType")
-    data["ExpCheck_Column:MGE_ElementCode"] = get_property_value(psets, "ExpCheck_Column", "MGE_ElementCode")
-    data["ExpCheck_Column:MGE_Gost"] = get_property_value(psets, "ExpCheck_Column", "MGE_Gost")
-    data["ExpCheck_Column:MGE_Material"] = get_property_value(psets, "ExpCheck_Column", "MGE_Material")
-    data["ExpCheck_Column:MGE_MaterialCode"] = get_property_value(psets, "ExpCheck_Column", "MGE_MaterialCode")
-    data["ExpCheck_Column:MGE_Name"] = get_property_value(psets, "ExpCheck_Column", "MGE_Name")
-    data["ExpCheck_Column:MGE_Position"] = get_property_value(psets, "ExpCheck_Column", "MGE_Position")
-    data["ExpCheck_Column:MGE_SeriaNumber"] = get_property_value(psets, "ExpCheck_Column", "MGE_SeriaNumber")
-    data["ExpCheck_Column:MGE_SteelGrade"] = get_property_value(psets, "ExpCheck_Column", "MGE_SteelGrade")
-    
-    # ExpCheck_ColumnReinforcement
-    data["ExpCheck_ColumnReinforcement:MGE_ReinforceStrengthClass"] = get_property_value(psets, "ExpCheck_ColumnReinforcement", "MGE_ReinforceStrengthClass")
-    
-    # ExpCheck_MaterialConcrete
-    data["ExpCheck_MaterialConcrete:MGE_ConcreteGost"] = get_property_value(psets, "ExpCheck_MaterialConcrete", "MGE_ConcreteGost")
-    data["ExpCheck_MaterialConcrete:MGE_ConcreteGrade"] = get_property_value(psets, "ExpCheck_MaterialConcrete", "MGE_ConcreteGrade")
-    data["ExpCheck_MaterialConcrete:MGE_FreezeDurability"] = get_property_value(psets, "ExpCheck_MaterialConcrete", "MGE_FreezeDurability")
-    data["ExpCheck_MaterialConcrete:MGE_WaterResist"] = get_property_value(psets, "ExpCheck_MaterialConcrete", "MGE_WaterResist")
-    
-    # ExpCheck_Ramp
-    data["ExpCheck_Ramp:MGE_ElementCode"] = get_property_value(psets, "ExpCheck_Ramp", "MGE_ElementCode")
-    data["ExpCheck_Ramp:MGE_Gost"] = get_property_value(psets, "ExpCheck_Ramp", "MGE_Gost")
-    data["ExpCheck_Ramp:MGE_Material"] = get_property_value(psets, "ExpCheck_Ramp", "MGE_Material")
-    data["ExpCheck_Ramp:MGE_MaterialCode"] = get_property_value(psets, "ExpCheck_Ramp", "MGE_MaterialCode")
-    data["ExpCheck_Ramp:MGE_Name"] = get_property_value(psets, "ExpCheck_Ramp", "MGE_Name")
-    data["ExpCheck_Ramp:MGE_Position"] = get_property_value(psets, "ExpCheck_Ramp", "MGE_Position")
-    data["ExpCheck_Ramp:MGE_Section"] = get_property_value(psets, "ExpCheck_Ramp", "MGE_Section")
-    
-    # ExpCheck_Slab
-    data["ExpCheck_Slab:MGE_ElementCode"] = get_property_value(psets, "ExpCheck_Slab", "MGE_ElementCode")
-    data["ExpCheck_Slab:MGE_Gost"] = get_property_value(psets, "ExpCheck_Slab", "MGE_Gost")
-    data["ExpCheck_Slab:MGE_Material"] = get_property_value(psets, "ExpCheck_Slab", "MGE_Material")
-    data["ExpCheck_Slab:MGE_MaterialCode"] = get_property_value(psets, "ExpCheck_Slab", "MGE_MaterialCode")
-    data["ExpCheck_Slab:MGE_Name"] = get_property_value(psets, "ExpCheck_Slab", "MGE_Name")
-    data["ExpCheck_Slab:MGE_Position"] = get_property_value(psets, "ExpCheck_Slab", "MGE_Position")
-    data["ExpCheck_Slab:MGE_SlabType"] = get_property_value(psets, "ExpCheck_Slab", "MGE_SlabType")
-    
-    # ExpCheck_SlabReinforcement
-    data["ExpCheck_SlabReinforcement:MGE_ReinforceStrengthClass"] = get_property_value(psets, "ExpCheck_SlabReinforcement", "MGE_ReinforceStrengthClass")
-    
-    # ExpCheck_StairFlight
-    data["ExpCheck_StairFlight:MGE_ElementCode"] = get_property_value(psets, "ExpCheck_StairFlight", "MGE_ElementCode")
-    data["ExpCheck_StairFlight:MGE_Gost"] = get_property_value(psets, "ExpCheck_StairFlight", "MGE_Gost")
-    data["ExpCheck_StairFlight:MGE_Material"] = get_property_value(psets, "ExpCheck_StairFlight", "MGE_Material")
-    data["ExpCheck_StairFlight:MGE_MaterialCode"] = get_property_value(psets, "ExpCheck_StairFlight", "MGE_MaterialCode")
-    data["ExpCheck_StairFlight:MGE_Name"] = get_property_value(psets, "ExpCheck_StairFlight", "MGE_Name")
-    data["ExpCheck_StairFlight:MGE_Position"] = get_property_value(psets, "ExpCheck_StairFlight", "MGE_Position")
-    data["ExpCheck_StairFlight:MGE_Section"] = get_property_value(psets, "ExpCheck_StairFlight", "MGE_Section")
-    
-    # ExpCheck_Wall
-    data["ExpCheck_Wall:MGE_ElementCode"] = get_property_value(psets, "ExpCheck_Wall", "MGE_ElementCode")
-    data["ExpCheck_Wall:MGE_Gost"] = get_property_value(psets, "ExpCheck_Wall", "MGE_Gost")
-    data["ExpCheck_Wall:MGE_Material"] = get_property_value(psets, "ExpCheck_Wall", "MGE_Material")
-    data["ExpCheck_Wall:MGE_MaterialCode"] = get_property_value(psets, "ExpCheck_Wall", "MGE_MaterialCode")
-    data["ExpCheck_Wall:MGE_Name"] = get_property_value(psets, "ExpCheck_Wall", "MGE_Name")
-    data["ExpCheck_Wall:MGE_Position"] = get_property_value(psets, "ExpCheck_Wall", "MGE_Position")
-    
-    # ExpCheck_WallReinforcement
-    data["ExpCheck_WallReinforcement:MGE_ReinforceStrengthClass"] = get_property_value(psets, "ExpCheck_WallReinforcement", "MGE_ReinforceStrengthClass")
+    # Динамическое извлечение всех параметров из psets
+    for pset_name, props in psets.items():
+        for prop_name, prop_value in props.items():
+            if prop_value is not None and prop_name != 'id':
+                # Формируем ключ в формате "PsetName:PropertyName"
+                key = f"{pset_name}:{prop_name}"
+                data[key] = prop_value
     
     # Ifc Class
     data["Ifc Class"] = element.is_a()
-    
-    # Pset_BeamCommon
-    data["Pset_BeamCommon:IsExternal"] = get_property_value(psets, "Pset_BeamCommon", "IsExternal")
-    data["Pset_BeamCommon:LoadBearing"] = get_property_value(psets, "Pset_BeamCommon", "LoadBearing")
-    data["Pset_BeamCommon:Reference"] = get_property_value(psets, "Pset_BeamCommon", "Reference")
-    data["Pset_BeamCommon:Roll"] = get_property_value(psets, "Pset_BeamCommon", "Roll")
-    data["Pset_BeamCommon:Slope"] = get_property_value(psets, "Pset_BeamCommon", "Slope")
-    data["Pset_BeamCommon:Span"] = get_property_value(psets, "Pset_BeamCommon", "Span")
-    
-    # Pset_BuildingCommon
-    data["Pset_BuildingCommon:ConstructionMethod"] = get_property_value(psets, "Pset_BuildingCommon", "ConstructionMethod")
-    data["Pset_BuildingCommon:FireProtectionClass"] = get_property_value(psets, "Pset_BuildingCommon", "FireProtectionClass")
-    data["Pset_BuildingCommon:IsLandmarked"] = get_property_value(psets, "Pset_BuildingCommon", "IsLandmarked")
-    data["Pset_BuildingCommon:NumberOfStoreys"] = get_property_value(psets, "Pset_BuildingCommon", "NumberOfStoreys")
-    data["Pset_BuildingCommon:Reference"] = get_property_value(psets, "Pset_BuildingCommon", "Reference")
-    
-    # Pset_BuildingElementProxyCommon
-    data["Pset_BuildingElementProxyCommon:IsExternal"] = get_property_value(psets, "Pset_BuildingElementProxyCommon", "IsExternal")
-    data["Pset_BuildingElementProxyCommon:Reference"] = get_property_value(psets, "Pset_BuildingElementProxyCommon", "Reference")
-    
-    # Pset_BuildingStoreyCommon
-    data["Pset_BuildingStoreyCommon:AboveGround"] = get_property_value(psets, "Pset_BuildingStoreyCommon", "AboveGround")
-    data["Pset_BuildingStoreyCommon:EntranceLevel"] = get_property_value(psets, "Pset_BuildingStoreyCommon", "EntranceLevel")
-    data["Pset_BuildingStoreyCommon:Reference"] = get_property_value(psets, "Pset_BuildingStoreyCommon", "Reference")
-    data["Pset_BuildingStoreyCommon:SprinklerProtection"] = get_property_value(psets, "Pset_BuildingStoreyCommon", "SprinklerProtection")
-    data["Pset_BuildingStoreyCommon:SprinklerProtectionAutomatic"] = get_property_value(psets, "Pset_BuildingStoreyCommon", "SprinklerProtectionAutomatic")
-    
-    # Pset_BuildingSystemCommon
-    data["Pset_BuildingSystemCommon:Reference"] = get_property_value(psets, "Pset_BuildingSystemCommon", "Reference")
-    
-    # Pset_ColumnCommon
-    data["Pset_ColumnCommon:IsExternal"] = get_property_value(psets, "Pset_ColumnCommon", "IsExternal")
-    data["Pset_ColumnCommon:LoadBearing"] = get_property_value(psets, "Pset_ColumnCommon", "LoadBearing")
-    data["Pset_ColumnCommon:Reference"] = get_property_value(psets, "Pset_ColumnCommon", "Reference")
-    data["Pset_ColumnCommon:Slope"] = get_property_value(psets, "Pset_ColumnCommon", "Slope")
-    data["Pset_ColumnCommon:ThermalTransmittance"] = get_property_value(psets, "Pset_ColumnCommon", "ThermalTransmittance")
-    
-    # Pset_ConcreteElementGeneral
-    data["Pset_ConcreteElementGeneral:ConcreteCover"] = get_property_value(psets, "Pset_ConcreteElementGeneral", "ConcreteCover")
-    data["Pset_ConcreteElementGeneral:ConcreteCoverAtLinks"] = get_property_value(psets, "Pset_ConcreteElementGeneral", "ConcreteCoverAtLinks")
-    data["Pset_ConcreteElementGeneral:ConstructionMethod"] = get_property_value(psets, "Pset_ConcreteElementGeneral", "ConstructionMethod")
-    data["Pset_ConcreteElementGeneral:ReinforcementVolumeRatio"] = get_property_value(psets, "Pset_ConcreteElementGeneral", "ReinforcementVolumeRatio")
-    data["Pset_ConcreteElementGeneral:StructuralClass"] = get_property_value(psets, "Pset_ConcreteElementGeneral", "StructuralClass")
-    
-    # Pset_ElementAssemblyCommon
-    data["Pset_ElementAssemblyCommon:Reference"] = get_property_value(psets, "Pset_ElementAssemblyCommon", "Reference")
-    
-    # Pset_EnvironmentalImpactIndicators
-    data["Pset_EnvironmentalImpactIndicators:Reference"] = get_property_value(psets, "Pset_EnvironmentalImpactIndicators", "Reference")
-    
-    # Pset_ManufacturerTypeInformation
-    data["Pset_ManufacturerTypeInformation:AssemblyPlace"] = get_property_value(psets, "Pset_ManufacturerTypeInformation", "AssemblyPlace")
-    data["Pset_ManufacturerTypeInformation:Manufacturer"] = get_property_value(psets, "Pset_ManufacturerTypeInformation", "Manufacturer")
-    
-    # Pset_MemberCommon
-    data["Pset_MemberCommon:IsExternal"] = get_property_value(psets, "Pset_MemberCommon", "IsExternal")
-    data["Pset_MemberCommon:LoadBearing"] = get_property_value(psets, "Pset_MemberCommon", "LoadBearing")
-    data["Pset_MemberCommon:Reference"] = get_property_value(psets, "Pset_MemberCommon", "Reference")
-    
-    # Pset_OpeningElementCommon
-    data["Pset_OpeningElementCommon:Reference"] = get_property_value(psets, "Pset_OpeningElementCommon", "Reference")
-    
-    # Pset_PlateCommon
-    data["Pset_PlateCommon:IsExternal"] = get_property_value(psets, "Pset_PlateCommon", "IsExternal")
-    data["Pset_PlateCommon:LoadBearing"] = get_property_value(psets, "Pset_PlateCommon", "LoadBearing")
-    data["Pset_PlateCommon:Reference"] = get_property_value(psets, "Pset_PlateCommon", "Reference")
-    
-    # Pset_RampCommon
-    data["Pset_RampCommon:IsExternal"] = get_property_value(psets, "Pset_RampCommon", "IsExternal")
-    data["Pset_RampCommon:Reference"] = get_property_value(psets, "Pset_RampCommon", "Reference")
-    
-    # Pset_RampFlightCommon
-    data["Pset_RampFlightCommon:Reference"] = get_property_value(psets, "Pset_RampFlightCommon", "Reference")
-    data["Pset_RampFlightCommon:Slope"] = get_property_value(psets, "Pset_RampFlightCommon", "Slope")
-    
-    # Pset_ReinforcementBarPitchOfBeam
-    data["Pset_ReinforcementBarPitchOfBeam:Reference"] = get_property_value(psets, "Pset_ReinforcementBarPitchOfBeam", "Reference")
-    
-    # Pset_ReinforcementBarPitchOfColumn
-    data["Pset_ReinforcementBarPitchOfColumn:Reference"] = get_property_value(psets, "Pset_ReinforcementBarPitchOfColumn", "Reference")
-    
-    # Pset_ReinforcementBarPitchOfSlab
-    data["Pset_ReinforcementBarPitchOfSlab:Reference"] = get_property_value(psets, "Pset_ReinforcementBarPitchOfSlab", "Reference")
-    
-    # Pset_ReinforcementBarPitchOfWall
-    data["Pset_ReinforcementBarPitchOfWall:Reference"] = get_property_value(psets, "Pset_ReinforcementBarPitchOfWall", "Reference")
-    
-    # Pset_SlabCommon
-    data["Pset_SlabCommon:IsExternal"] = get_property_value(psets, "Pset_SlabCommon", "IsExternal")
-    data["Pset_SlabCommon:LoadBearing"] = get_property_value(psets, "Pset_SlabCommon", "LoadBearing")
-    data["Pset_SlabCommon:PitchAngle"] = get_property_value(psets, "Pset_SlabCommon", "PitchAngle")
-    data["Pset_SlabCommon:Reference"] = get_property_value(psets, "Pset_SlabCommon", "Reference")
-    data["Pset_SlabCommon:ThermalTransmittance"] = get_property_value(psets, "Pset_SlabCommon", "ThermalTransmittance")
-    
-    # Pset_StairFlightCommon
-    data["Pset_StairFlightCommon:IsExternal"] = get_property_value(psets, "Pset_StairFlightCommon", "IsExternal")
-    data["Pset_StairFlightCommon:LoadBearing"] = get_property_value(psets, "Pset_StairFlightCommon", "LoadBearing")
-    data["Pset_StairFlightCommon:Reference"] = get_property_value(psets, "Pset_StairFlightCommon", "Reference")
-    
-    # Pset_WallCommon
-    data["Pset_WallCommon:ExtendToStructure"] = get_property_value(psets, "Pset_WallCommon", "ExtendToStructure")
-    data["Pset_WallCommon:IsExternal"] = get_property_value(psets, "Pset_WallCommon", "IsExternal")
-    data["Pset_WallCommon:LoadBearing"] = get_property_value(psets, "Pset_WallCommon", "LoadBearing")
-    data["Pset_WallCommon:Reference"] = get_property_value(psets, "Pset_WallCommon", "Reference")
-    data["Pset_WallCommon:ThermalTransmittance"] = get_property_value(psets, "Pset_WallCommon", "ThermalTransmittance")
-    
-    # Qto_BeamBaseQuantities
-    data["Qto_BeamBaseQuantities:CrossSectionArea"] = get_property_value(psets, "Qto_BeamBaseQuantities", "CrossSectionArea")
-    data["Qto_BeamBaseQuantities:GrossSurfaceArea"] = get_property_value(psets, "Qto_BeamBaseQuantities", "GrossSurfaceArea")
-    data["Qto_BeamBaseQuantities:GrossVolume"] = get_property_value(psets, "Qto_BeamBaseQuantities", "GrossVolume")
-    data["Qto_BeamBaseQuantities:Length"] = get_property_value(psets, "Qto_BeamBaseQuantities", "Length")
-    data["Qto_BeamBaseQuantities:NetSurfaceArea"] = get_property_value(psets, "Qto_BeamBaseQuantities", "NetSurfaceArea")
-    data["Qto_BeamBaseQuantities:NetVolume"] = get_property_value(psets, "Qto_BeamBaseQuantities", "NetVolume")
-    data["Qto_BeamBaseQuantities:OuterSurfaceArea"] = get_property_value(psets, "Qto_BeamBaseQuantities", "OuterSurfaceArea")
-    
-    # Qto_ColumnBaseQuantities
-    data["Qto_ColumnBaseQuantities:CrossSectionArea"] = get_property_value(psets, "Qto_ColumnBaseQuantities", "CrossSectionArea")
-    data["Qto_ColumnBaseQuantities:GrossVolume"] = get_property_value(psets, "Qto_ColumnBaseQuantities", "GrossVolume")
-    data["Qto_ColumnBaseQuantities:Length"] = get_property_value(psets, "Qto_ColumnBaseQuantities", "Length")
-    data["Qto_ColumnBaseQuantities:NetVolume"] = get_property_value(psets, "Qto_ColumnBaseQuantities", "NetVolume")
-    data["Qto_ColumnBaseQuantities:OuterSurfaceArea"] = get_property_value(psets, "Qto_ColumnBaseQuantities", "OuterSurfaceArea")
-    
-    # Qto_MemberBaseQuantities
-    data["Qto_MemberBaseQuantities:CrossSectionArea"] = get_property_value(psets, "Qto_MemberBaseQuantities", "CrossSectionArea")
-    data["Qto_MemberBaseQuantities:GrossSurfaceArea"] = get_property_value(psets, "Qto_MemberBaseQuantities", "GrossSurfaceArea")
-    data["Qto_MemberBaseQuantities:GrossVolume"] = get_property_value(psets, "Qto_MemberBaseQuantities", "GrossVolume")
-    data["Qto_MemberBaseQuantities:Length"] = get_property_value(psets, "Qto_MemberBaseQuantities", "Length")
-    data["Qto_MemberBaseQuantities:NetSurfaceArea"] = get_property_value(psets, "Qto_MemberBaseQuantities", "NetSurfaceArea")
-    data["Qto_MemberBaseQuantities:NetVolume"] = get_property_value(psets, "Qto_MemberBaseQuantities", "NetVolume")
-    data["Qto_MemberBaseQuantities:OuterSurfaceArea"] = get_property_value(psets, "Qto_MemberBaseQuantities", "OuterSurfaceArea")
-    
-    # Qto_OpeningElementBaseQuantities
-    data["Qto_OpeningElementBaseQuantities:Area"] = get_property_value(psets, "Qto_OpeningElementBaseQuantities", "Area")
-    data["Qto_OpeningElementBaseQuantities:Depth"] = get_property_value(psets, "Qto_OpeningElementBaseQuantities", "Depth")
-    data["Qto_OpeningElementBaseQuantities:Height"] = get_property_value(psets, "Qto_OpeningElementBaseQuantities", "Height")
-    data["Qto_OpeningElementBaseQuantities:Width"] = get_property_value(psets, "Qto_OpeningElementBaseQuantities", "Width")
-    
-    # Qto_SlabBaseQuantities
-    data["Qto_SlabBaseQuantities:GrossArea"] = get_property_value(psets, "Qto_SlabBaseQuantities", "GrossArea")
-    data["Qto_SlabBaseQuantities:GrossVolume"] = get_property_value(psets, "Qto_SlabBaseQuantities", "GrossVolume")
-    data["Qto_SlabBaseQuantities:NetArea"] = get_property_value(psets, "Qto_SlabBaseQuantities", "NetArea")
-    data["Qto_SlabBaseQuantities:NetVolume"] = get_property_value(psets, "Qto_SlabBaseQuantities", "NetVolume")
-    data["Qto_SlabBaseQuantities:Perimeter"] = get_property_value(psets, "Qto_SlabBaseQuantities", "Perimeter")
-    data["Qto_SlabBaseQuantities:Width"] = get_property_value(psets, "Qto_SlabBaseQuantities", "Width")
-    
-    # Qto_StairFlightBaseQuantities
-    data["Qto_StairFlightBaseQuantities:GrossVolume"] = get_property_value(psets, "Qto_StairFlightBaseQuantities", "GrossVolume")
-    data["Qto_StairFlightBaseQuantities:Length"] = get_property_value(psets, "Qto_StairFlightBaseQuantities", "Length")
-    data["Qto_StairFlightBaseQuantities:NetVolume"] = get_property_value(psets, "Qto_StairFlightBaseQuantities", "NetVolume")
-    
-    # Qto_WallBaseQuantities
-    data["Qto_WallBaseQuantities:GrossSideArea"] = get_property_value(psets, "Qto_WallBaseQuantities", "GrossSideArea")
-    data["Qto_WallBaseQuantities:GrossVolume"] = get_property_value(psets, "Qto_WallBaseQuantities", "GrossVolume")
-    data["Qto_WallBaseQuantities:Height"] = get_property_value(psets, "Qto_WallBaseQuantities", "Height")
-    data["Qto_WallBaseQuantities:Length"] = get_property_value(psets, "Qto_WallBaseQuantities", "Length")
-    data["Qto_WallBaseQuantities:NetSideArea"] = get_property_value(psets, "Qto_WallBaseQuantities", "NetSideArea")
-    data["Qto_WallBaseQuantities:NetVolume"] = get_property_value(psets, "Qto_WallBaseQuantities", "NetVolume")
-    data["Qto_WallBaseQuantities:Width"] = get_property_value(psets, "Qto_WallBaseQuantities", "Width")
-    
-    # Storey
-    data["Storey"] = None
-    
-    # Type
-    data["Type:GlobalId"] = None
-    data["Type:Name"] = None
     
     return data
 
@@ -744,7 +494,7 @@ def extract_ifc_data(ifc_path):
         except:
             pass
 
-        # Извлекаем все параметры согласно REQUIRED_COLUMNS
+        # Извлекаем все параметры из модели
         item = extract_element_properties(element, psets)
 
         # Добавляем вычисляемые значения объема и площади
@@ -1075,8 +825,14 @@ def create_full_elements_excel(data, output_path):
         "Характеристики материала"
     ]
     
-    # Добавляем все остальные колонки из REQUIRED_COLUMNS
-    all_headers = main_headers + [col for col in REQUIRED_COLUMNS if col not in main_headers]
+    # Добавляем все остальные колонки из данных элементов
+    # Собираем все уникальные ключи из всех элементов
+    all_data_keys = set()
+    for item in data:
+        all_data_keys.update(item.keys())
+    
+    # Формируем заголовки: основные + все остальные из данных
+    all_headers = main_headers + [col for col in sorted(all_data_keys) if col not in main_headers]
     
     # Стили
     header_font = Font(bold=True, color="FFFFFF")
@@ -1182,7 +938,7 @@ def create_full_elements_excel(data, output_path):
         char_str = "; ".join(char_parts) if char_parts else ""
         ws.cell(row=row_idx, column=11, value=char_str).border = thin_border
         
-        # Остальные колонки из REQUIRED_COLUMNS
+        # Остальные колонки из данных элементов
         for col_idx, header in enumerate(all_headers[11:], 12):
             value = item.get(header, "")
             ws.cell(row=row_idx, column=col_idx + 11, value=value).border = thin_border
