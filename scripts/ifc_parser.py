@@ -182,15 +182,18 @@ def classify_element(element, name, psets=None):
 def parse_section_number(name):
     """
     Парсинг префикса и номера секции из имени элемента.
-    Например: ФПм-1.1-1 → префикс=ФП, секция=1
-    Вторая цифра в номере секции указывает на номер этажа.
+    
+    Поддерживаемые форматы:
+    1. ФПм-1.1-1 → префикс=ФП, секция=1, floor_number=1 (вторая цифра в номере секции указывает на номер этажа)
+    2. (НесКол_2ур) → floor_number=2 (извлечение из скобок, паттерн _Xур или _Xэт)
+    3. (ОбщМод_Плита) → floor_number=None (нет информации об этаже)
     
     Возвращает кортеж: (prefix, section_number, floor_number)
     """
     if not name:
         return None, None, None
     
-    # Ищем паттерн типа "-X.Y-Z" где X.Y - номер секции
+    # Приоритет 1: Ищем паттерн типа "-X.Y-Z" где X.Y - номер секции
     # Примеры: ФПм-1.1-1, ФПм-2.1-1, ФПм-3.1-1
     match = re.search(r'-([0-9]+)\.([0-9]+)', name)
     if match:
@@ -203,6 +206,16 @@ def parse_section_number(name):
         
         return prefix, section_major, floor_number
     
+    # Приоритет 2: Ищем информацию об этаже в скобках (паттерн _Xур или _Xэт)
+    # Примеры: (НесКол_2ур), (ОбщМод_Плита)
+    bracket_match = re.search(r'\([^)]*_(\d+)(ур|эт)[^)]*\)', name, re.IGNORECASE)
+    if bracket_match:
+        floor_number = int(bracket_match.group(1))
+        # Префикс - первая часть имени до подчеркивания или до скобок
+        prefix_match = re.match(r'^(\d+)_', name)
+        prefix = prefix_match.group(1) if prefix_match else None
+        return prefix, None, floor_number
+    
     return None, None, None
 
 
@@ -210,18 +223,52 @@ def get_level_category(floor_number):
     """
     Определение категории уровня на основе номера этажа.
     
-    Если вторая цифра в номере секции = 1 → до отм. 0,000
-    Если вторая цифра >= 2 → выше отм. 0,000
+    Если floor_number = 1 или -1 (подземный) → до отм. 0,000
+    Если floor_number >= 2 → выше отм. 0,000
     """
     if floor_number is None:
         return None
     
-    if floor_number == 1:
+    if floor_number <= 1:
         return "до отм. 0,000"
     elif floor_number >= 2:
         return "выше отм. 0,000"
     else:
         return None
+
+
+def get_storey_info(element):
+    """
+    Извлечь информацию о этаже (IfcBuildingStorey), к которому принадлежит элемент.
+    
+    Возвращает кортеж: (storey_name, storey_elevation, floor_number)
+    где floor_number - числовой номер этажа (извлекается из имени этажа)
+    """
+    storey_name = None
+    storey_elevation = None
+    floor_number = None
+    
+    # Проверяем ContainedInStructure для получения этажа
+    if hasattr(element, 'ContainedInStructure') and element.ContainedInStructure:
+        for rel in element.ContainedInStructure:
+            if hasattr(rel, 'RelatingStructure'):
+                storey = rel.RelatingStructure
+                storey_name = getattr(storey, 'Name', None)
+                storey_elevation = getattr(storey, 'Elevation', None)
+                
+                # Извлекаем номер этажа из имени (например, "4_Этаж_основной" -> 4)
+                if storey_name:
+                    match = re.match(r'^(\d+)_', storey_name)
+                    if match:
+                        floor_number = int(match.group(1))
+                    # Для подземных этажей (например, "-1_Подземный этаж_основной")
+                    elif storey_name.startswith('-'):
+                        match = re.match(r'^(-?\d+)_', storey_name)
+                        if match:
+                            floor_number = int(match.group(1))
+                break
+    
+    return storey_name, storey_elevation, floor_number
 
 
 def parse_concrete_properties(name, psets):
@@ -369,8 +416,17 @@ def extract_ifc_data(ifc_path):
         category = classify_element(element, name, psets)
         material_props = parse_concrete_properties(name, psets)
 
-        # Парсинг секции и определение категории уровня
-        prefix, section_number, floor_number = parse_section_number(name)
+        # === Определение уровня (этажа) ===
+        # Приоритет 1: Получаем этаж из структуры IFC модели (IfcBuildingStorey)
+        storey_name, storey_elevation, ifc_floor_number = get_storey_info(element)
+        
+        # Приоритет 2: Парсинг секции и этажа из имени элемента (резервный метод)
+        prefix, section_number, name_floor_number = parse_section_number(name)
+        
+        # Используем floor_number из IFC если есть, иначе из имени
+        floor_number = ifc_floor_number if ifc_floor_number is not None else name_floor_number
+        
+        # Определяем категорию уровня на основе номера этажа
         level_category = get_level_category(floor_number)
 
         item["category"] = category
@@ -383,7 +439,9 @@ def extract_ifc_data(ifc_path):
         item["Категория уровня"] = level_category if level_category else ""
         item["prefix"] = prefix if prefix else ""
         item["section_number"] = section_number if section_number else ""
-        item["floor_number"] = floor_number if floor_number else ""
+        item["floor_number"] = floor_number if floor_number is not None else ""
+        item["storey_name"] = storey_name if storey_name else ""
+        item["storey_elevation"] = storey_elevation if storey_elevation is not None else ""
 
         elements_data.append(item)
 
