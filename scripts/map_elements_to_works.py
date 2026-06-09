@@ -769,7 +769,7 @@ def match_work_to_element(element_params: Dict, work_row: pd.Series) -> bool:
     
     # 5. Семантическая фильтрация по наименованию (отсечение явно неподходящих работ)
     elem_name = element_params['name'].lower()
-    work_name = str(work_row.get('Наименование работ', '')).lower()
+    work_name = str(work_row.get('Наименование работ (целые числа) материалы для этих работ (дробные числа)', '')).lower()
     
     # Определяем, является ли элемент элементом шва/профиля/герметика
     is_joint_element = any(x in elem_name for x in ['шов', 'заполнен', 'профиль', 'шпонк', 'герметик', 'набухающ'])
@@ -872,7 +872,7 @@ def find_works_for_element(element_row: pd.Series, works_df: pd.DataFrame,
         if match_work_to_element(element_params, work_row):
             matched_works.append({
                 'work_idx': work_row.name,
-                'work_name': work_row.get('Наименование работ', ''),
+                'work_name': work_row.get('Наименование работ (целые числа) материалы для этих работ (дробные числа)', ''),
                 'unit': work_row.get('Ед. изм', ''),
                 'tsn_code': work_row.get('Шифр ТСН', ''),
                 'description': work_row.get('Наименование расценки/ресурса', ''),
@@ -904,20 +904,20 @@ def get_reinforcement_works(element_params: Dict, works_underground: Dict, works
     if element_level == 'underground':
         for ifc_class, df in works_underground.items():
             for _, work_row in df.iterrows():
-                work_name = str(work_row.get('Наименование работ', '')).lower()
+                work_name = str(work_row.get('Наименование работ (целые числа) материалы для этих работ (дробные числа)', '')).lower()
                 if any(kw in work_name for kw in ['армирован', 'арматура', 'сетк', 'каркас']):
                     candidate_works.append(work_row)
     elif element_level == 'above':
         for ifc_class, df in works_aboveground.items():
             for _, work_row in df.iterrows():
-                work_name = str(work_row.get('Наименование работ', '')).lower()
+                work_name = str(work_row.get('Наименование работ (целые числа) материалы для этих работ (дробные числа)', '')).lower()
                 if any(kw in work_name for kw in ['армирован', 'арматура', 'сетк', 'каркас']):
                     candidate_works.append(work_row)
     
     # Также проверяем универсальные работы
     if works_universal is not None:
         for _, work_row in works_universal.iterrows():
-            work_name = str(work_row.get('Наименование работ', '')).lower()
+            work_name = str(work_row.get('Наименование работ (целые числа) материалы для этих работ (дробные числа)', '')).lower()
             if any(kw in work_name for kw in ['армирован', 'арматура', 'сетк', 'каркас']):
                 candidate_works.append(work_row)
     
@@ -926,7 +926,7 @@ def get_reinforcement_works(element_params: Dict, works_underground: Dict, works
         if match_work_to_element(element_params, work_row):
             reinforcement_works.append({
                 'work_idx': work_row.name,
-                'work_name': work_row.get('Наименование работ', ''),
+                'work_name': work_row.get('Наименование работ (целые числа) материалы для этих работ (дробные числа)', ''),
                 'unit': work_row.get('Ед. изм', ''),
                 'tsn_code': work_row.get('Шифр ТСН', ''),
                 'description': work_row.get('Наименование расценки/ресурса', ''),
@@ -966,14 +966,14 @@ def load_and_prepare_works(works_file: str) -> Tuple[pd.DataFrame, Dict, Dict, p
     print(f"Валидных видов работ: {len(df_works_valid)}")
     
     # Определяем текущий раздел для каждой строки
-    # Разделы определяются по строкам в колонке "Наименование работ" содержащим "Подземная часть здания" или "Надземная часть здания"
+    # Разделы определяются по строкам в колонке "Наименование работ (целые числа) материалы для этих работ (дробные числа)" содержащим "Подземная часть здания" или "Надземная часть здания"
     # Важно: ищем именно заголовки высокого уровня, а не подразделы
     
     current_section = None  # 'underground', 'aboveground', 'other'
     section_column = []
     
     for idx, row in df_works.iterrows():
-        name = str(row['Наименование работ']) if pd.notna(row['Наименование работ']) else ''
+        name = str(row['Наименование работ (целые числа) материалы для этих работ (дробные числа)']) if pd.notna(row['Наименование работ (целые числа) материалы для этих работ (дробные числа)']) else ''
         
         # Проверяем является ли строка заголовком основного раздела
         # Ищем именно главные разделы, а не подразделы
