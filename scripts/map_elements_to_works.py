@@ -2,21 +2,21 @@
 # -*- coding: utf-8 -*-
 """
 Скрипт для подбора видов работ к элементам из таблицы full_elements.xlsx
-на основе таблицы Перечень работ КР_new.xlsx (версия 2)
+на основе таблицы Перечень работ КР_new.xlsx (версия 3)
 
-Алгоритм:
-1. Определяем IFC класс элемента по наименованию
-2. Проверяем уровень элемента (подземный/надземный)
-3. Извлекаем характеристики материала (класс бетона, морозостойкость, водонепроницаемость)
-4. Определяем геометрические параметры (толщина, площадь сечения, объем, высота и т.д.)
-5. Подбираем виды работ по совпадению IFC класса, условий параметризации и характеристик материала
-6. Элементы без работ: термовкладыши, отверстия, трубы не получают виды работ
+Алгоритм v3:
+1. Берет элемент, определяет какой он - подземный или наземный (по колонке 'Подземный/Надземный')
+2. Сопоставляет его с видами работ ТОЛЬКО по подразделам относящимся к разделу подземных/надземных видов работ
+   - Для подземных элементов: работы из раздела "Подземная часть здания" и "Подземная часть здания. ..."
+   - Для надземных элементов: работы из раздела "Надземная часть здания" и "Надземная часть здания. ..."
+3. При выборе подходящих работ проверяет условия по размерам или площади или сечению (проверяет в параметрах элемента)
+4. Далее проверяет материал элемента и его параметры на соответствие
+5. Записывает в новую созданную таблицу сам элемент и все виды работ которые подошли к нему путем такого поиска
 
-Ключевые особенности v2:
-- Учет уровня элемента (подземный/надземный) для выбора работ
+Ключевые особенности v3:
+- Строгое разделение работ по подземным/надземным разделам
+- Последовательная проверка: уровень → IFC класс → параметры → материал
 - Исключение элементов без работ (термовкладыши, отверстия, трубы)
-- Проверка наличия IFC класса в таблице работ
-- Расширенная проверка параметров через регулярные выражения
 """
 
 import pandas as pd
@@ -634,8 +634,17 @@ def match_work_to_element(element_params: Dict, work_row: pd.Series) -> bool:
 
 
 def find_works_for_element(element_row: pd.Series, works_df: pd.DataFrame, 
-                           works_by_ifc: Dict, works_universal: pd.DataFrame) -> List[Dict]:
-    """Находит все подходящие виды работ для элемента"""
+                           works_underground: Dict, works_aboveground: Dict, 
+                           works_universal: pd.DataFrame) -> List[Dict]:
+    """
+    Находит все подходящие виды работ для элемента с учетом уровня (подземный/надземный)
+    
+    Алгоритм:
+    1. Определяем уровень элемента (подземный/надземный)
+    2. Выбираем работы ТОЛЬКО из соответствующего раздела (подземные/надземные)
+    3. Проверяем IFC класс, параметры и материал
+    4. Добавляем универсальные работы (без привязки к уровню)
+    """
     
     element_params = get_element_parameters(element_row)
     
@@ -645,17 +654,33 @@ def find_works_for_element(element_row: pd.Series, works_df: pd.DataFrame,
     
     matched_works = []
     element_ifc = element_params['ifc_class'].lower()
+    element_level = element_params['level']
     
-    # Собираем подходящие работы
+    # Собираем подходящие работы в зависимости от уровня элемента
     candidate_works = []
     
-    # Добавляем работы для конкретного IFC класса
-    if element_ifc in works_by_ifc:
-        for _, work_row in works_by_ifc[element_ifc].iterrows():
-            candidate_works.append(work_row)
+    # Выбираем работы из соответствующего раздела
+    if element_level == 'Подземный':
+        # Для подземных элементов берем работы из подземного раздела
+        if element_ifc in works_underground:
+            for _, work_row in works_underground[element_ifc].iterrows():
+                candidate_works.append(work_row)
+    elif element_level == 'Надземный':
+        # Для надземных элементов берем работы из надземного раздела
+        if element_ifc in works_aboveground:
+            for _, work_row in works_aboveground[element_ifc].iterrows():
+                candidate_works.append(work_row)
+    else:
+        # Если уровень не определен, пробуем оба раздела
+        if element_ifc in works_underground:
+            for _, work_row in works_underground[element_ifc].iterrows():
+                candidate_works.append(work_row)
+        if element_ifc in works_aboveground:
+            for _, work_row in works_aboveground[element_ifc].iterrows():
+                candidate_works.append(work_row)
     
-    # Добавляем универсальные работы
-    if works_universal is not None:
+    # Добавляем универсальные работы (применяются ко всем уровням)
+    if works_universal is not None and len(works_universal) > 0:
         for _, work_row in works_universal.iterrows():
             candidate_works.append(work_row)
     
@@ -675,8 +700,16 @@ def find_works_for_element(element_row: pd.Series, works_df: pd.DataFrame,
     return matched_works
 
 
-def load_and_prepare_works(works_file: str) -> Tuple[pd.DataFrame, Dict, pd.DataFrame]:
-    """Загружает и подготавливает таблицу работ"""
+def load_and_prepare_works(works_file: str) -> Tuple[pd.DataFrame, Dict, Dict, pd.DataFrame]:
+    """
+    Загружает и подготавливает таблицу работ с разделением на подземные/надземные
+    
+    Возвращает:
+    - df_works_valid: все валидные работы
+    - works_underground: работы для подземной части (словарь по IFC классам)
+    - works_aboveground: работы для надземной части (словарь по IFC классам)
+    - works_universal: универсальные работы (без привязки к уровню)
+    """
     print(f"Загрузка таблицы работ из {works_file}...")
     
     # Пробуем разные варианты названия листа
@@ -695,8 +728,34 @@ def load_and_prepare_works(works_file: str) -> Tuple[pd.DataFrame, Dict, pd.Data
     df_works_valid = df_works[valid_works_mask].copy()
     print(f"Валидных видов работ: {len(df_works_valid)}")
     
-    # Группируем работы по IFC классам для ускорения поиска
-    works_by_ifc = {}
+    # Определяем текущий раздел для каждой строки
+    # Разделы определяются по строкам в колонке "№ п/п" содержащим "Раздел" или "Подраздел"
+    # или по строкам в "Наименование работ" содержащим "Подземная часть" или "Надземная часть"
+    
+    current_section = None  # 'underground', 'aboveground', 'other'
+    section_column = []
+    
+    for idx, row in df_works.iterrows():
+        num = str(row['№ п/п']) if pd.notna(row['№ п/п']) else ''
+        name = str(row['Наименование работ']) if pd.notna(row['Наименование работ']) else ''
+        
+        # Проверяем является ли строка заголовком раздела
+        if 'Подземн' in name:
+            current_section = 'underground'
+        elif 'Надземн' in name:
+            current_section = 'aboveground'
+        elif 'Раздел' in num or 'Подраздел' in num:
+            # Определяем раздел по контексту - смотрим предыдущие строки
+            # Если это подраздел, он наследует раздел от последнего глобального раздела
+            pass  # current_section остается прежним
+        
+        section_column.append(current_section)
+    
+    df_works_valid['_section'] = section_column[:len(df_works_valid)]
+    
+    # Группируем работы по IFC классам для ускорения поиска с разделением на подземные/надземные
+    works_underground = {}  # работы для подземной части
+    works_aboveground = {}  # работы для надземной части
     
     # Получаем уникальные IFC классы
     unique_ifcs = df_works_valid['IFC класс'].dropna().unique()
@@ -711,14 +770,30 @@ def load_and_prepare_works(works_file: str) -> Tuple[pd.DataFrame, Dict, pd.Data
             
             for ifc_part in ifc_parts:
                 if ifc_part and ifc_part not in ['не моделируется', 'чаще всего не моделируется', '-', '']:
-                    if ifc_part not in works_by_ifc:
-                        works_by_ifc[ifc_part] = df_works_valid[df_works_valid['IFC класс'].str.contains(ifc_class, na=False)]
+                    # Фильтруем работы по IFC классу и разделяем по секциям
+                    mask = df_works_valid['IFC класс'].str.contains(ifc_class, na=False)
+                    
+                    # Подземные работы
+                    underground_mask = mask & (df_works_valid['_section'] == 'underground')
+                    if underground_mask.any():
+                        if ifc_part not in works_underground:
+                            works_underground[ifc_part] = df_works_valid[underground_mask].copy()
+                    
+                    # Надземные работы
+                    aboveground_mask = mask & (df_works_valid['_section'] == 'aboveground')
+                    if aboveground_mask.any():
+                        if ifc_part not in works_aboveground:
+                            works_aboveground[ifc_part] = df_works_valid[aboveground_mask].copy()
     
-    # Работы без привязки к IFC классу (универсальные)
+    # Работы без привязки к IFC классу (универсальные) - они применяются ко всем уровням
     universal_mask = df_works_valid['IFC класс'].isin(['не моделируется', 'чаще всего не моделируется', '-', '']) | df_works_valid['IFC класс'].isna()
     works_universal = df_works_valid[universal_mask].copy()
     
-    return df_works_valid, works_by_ifc, works_universal
+    print(f"Подземных работ (по IFC): {sum(len(v) for v in works_underground.values())}")
+    print(f"Надземных работ (по IFC): {sum(len(v) for v in works_aboveground.values())}")
+    print(f"Универсальных работ: {len(works_universal)}")
+    
+    return df_works_valid, works_underground, works_aboveground, works_universal
 
 
 def map_elements_to_works(session_folder=None):
@@ -760,7 +835,7 @@ def main(session_folder=None):
         return {'success': False, 'error': error_msg}
     
     print("=" * 60)
-    print("Подбор видов работ к элементам (версия 2)")
+    print("Подбор видов работ к элементам (версия 3)")
     print("=" * 60)
     
     # Загружаем элементы
@@ -768,8 +843,8 @@ def main(session_folder=None):
     df_elements = pd.read_excel(elements_file)
     print(f"Элементы: {len(df_elements)} строк")
     
-    # Загружаем и подготавливаем работы
-    df_works_valid, works_by_ifc, works_universal = load_and_prepare_works(works_file)
+    # Загружаем и подготавливаем работы с разделением на подземные/надземные
+    df_works_valid, works_underground, works_aboveground, works_universal = load_and_prepare_works(works_file)
     
     # Оптимизация: предварительно фильтруем элементы без работ
     print("\nПредварительная фильтрация элементов...")
@@ -796,9 +871,9 @@ def main(session_folder=None):
         element_row = df_elements.iloc[idx]
         element_params = get_element_parameters(element_row)
         
-        # Находим подходящие работы
+        # Находим подходящие работы с учетом уровня элемента
         matched_works = find_works_for_element(
-            element_row, df_works_valid, works_by_ifc, works_universal
+            element_row, df_works_valid, works_underground, works_aboveground, works_universal
         )
         
         if matched_works:
