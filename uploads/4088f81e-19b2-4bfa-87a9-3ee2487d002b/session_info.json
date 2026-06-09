@@ -1,5 +1,5 @@
 {
-  "session_id": "6e87305d-a5e2-4435-b9c1-75f6ff157836",
+  "session_id": "4088f81e-19b2-4bfa-87a9-3ee2487d002b",
   "status": "completed",
   "pdf_files": [],
   "ifc_files": [
@@ -18,8 +18,7 @@
   "elements_json_file": "elements.json",
   "works_list_filtered": true,
   "works_list_output_file": "Перечень работ КР_new.xlsx",
-  "mapping_completed": true,
-  "mapped_elements_works_file": "mapped_elements_works.xlsx",
+  "mapping_error": "name 'get_element_parameters' is not defined",
   "results_summary": {
     "text_pages_count": 0,
     "drawing_pages_count": 0,
@@ -27,6 +26,6 @@
     "ifc_processed": true,
     "pdf_classified": false,
     "elements_json_saved": true,
-    "mapping_completed": true
+    "mapping_completed": false
   }
 }

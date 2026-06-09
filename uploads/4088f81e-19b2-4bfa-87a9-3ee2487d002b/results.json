@@ -20,16 +20,8 @@
   "height_filter": {
     "success": true,
     "output_file": "Перечень работ КР_new.xlsx",
-    "output_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/6e87305d-a5e2-4435-b9c1-75f6ff157836/Перечень работ КР_new.xlsx",
+    "output_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/4088f81e-19b2-4bfa-87a9-3ee2487d002b/Перечень работ КР_new.xlsx",
     "building_height": 64.16,
     "source_file": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/backend/../data/Перечень работ КР.xlsx"
-  },
-  "mapping": {
-    "success": true,
-    "output_file": "mapped_elements_works.xlsx",
-    "total_elements": 3268,
-    "matched_elements": 0,
-    "elements_without_works": 3268,
-    "total_matches": 0
   }
 }
