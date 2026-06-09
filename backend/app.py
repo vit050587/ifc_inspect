@@ -10,7 +10,6 @@ import shutil
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from scripts.files_classifier import classify_and_organize_files
-from scripts.pdf_classifier_llm import classify_pdf_files as classify_pdf_llm
 from scripts.draw_detector import extract_drawings_from_explanatory_note
 from scripts.ifc_parser import parse_ifc_file
 from scripts.filter_works_by_height import filter_works_by_height
@@ -130,22 +129,13 @@ def process_files():
         'pdf_count': len(file_org_results.get('pdf_documents', []))
     }
     
-    # Step 2: Classify PDF files using LLM (gemma3:27b, first 3 pages only)
+    # Step 2: PDF classification was removed (previously used LLM)
     print("\n" + "="*60)
-    print("🤖 ШАГ 2: КЛАССИФИКАЦИЯ PDF ДОКУМЕНТОВ (LLM)")
+    print("🤖 ШАГ 2: КЛАССИФИКАЦИЯ PDF ДОКУМЕНТОВ (ОТКЛЮЧЕНА)")
     print("="*60)
-    
-    try:
-        pdf_classification = classify_pdf_llm(session_folder)
-        results['pdf_classification'] = {
-            'categories': {cat: len(files) for cat, files in pdf_classification.items()},
-            'files': pdf_classification
-        }
-        session_info['pdf_classification'] = results['pdf_classification']
-        print("✅ Классификация PDF завершена")
-    except Exception as e:
-        print(f"❌ Ошибка классификации PDF: {e}")
-        session_info['pdf_classification_error'] = str(e)
+    print("✅ Классификация PDF пропущена")
+    results['pdf_classification'] = None
+    session_info['pdf_classification'] = None
     
     # Step 3: Extract drawings from "explanatory_note" PDFs
     print("\n" + "="*60)
