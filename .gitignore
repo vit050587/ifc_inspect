@@ -1,13 +1,1 @@
-```
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-
-# Excel files (assuming these are generated/output files)
-*.xlsx
-
-# Uploads directory (if it contains temporary/generated files)
-uploads/
-```
+Nothing should be ignored based on the provided file changes, as they only include source/config files (.html, .py) without any build artifacts, dependencies, or temporary files.

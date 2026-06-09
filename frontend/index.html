@@ -430,16 +430,19 @@
                     
                     <!-- Mapped Elements Works Table Preview -->
                     <div class="pages-info" id="mappedTableSection" style="display: none;">
-                        <h3 style="margin: 20px 0 15px; color: #2c3e50;">Объемы работ по группам элементов</h3>
+                        <h3 style="margin: 20px 0 15px; color: #2c3e50;">Таблица элементов и видов работ</h3>
                         <div style="overflow-x: auto; max-height: 500px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 4px;">
                             <table class="pages-table" style="min-width: 100%;">
                                 <thead>
                                     <tr>
-                                        <th>Элемент IFC</th>
-                                        <th>№ п/п работы</th>
+                                        <th>№</th>
+                                        <th>Наименование элемента</th>
+                                        <th>Уровень</th>
+                                        <th>IFC класс</th>
+                                        <th>Класс бетона</th>
                                         <th>Наименование работ</th>
                                         <th>Ед. изм</th>
-                                        <th>Оценка соответствия</th>
+                                        <th>Шифр ТСН</th>
                                     </tr>
                                 </thead>
                                 <tbody id="mappedTableBody">
@@ -1084,17 +1087,24 @@
                 
                 if (data.data && data.data.length > 0) {
                     // Skip header row if present
-                    const startIndex = data.data[0] && data.data[0][0] === 'Элемент IFC' ? 1 : 0;
+                    const startIndex = data.data[0] && data.data[0][0] === 'Element_Index' ? 1 : 0;
                     
                     for (let i = startIndex; i < data.data.length && i < 100; i++) {
                         const row = data.data[i];
                         const tr = document.createElement('tr');
+                        // Columns: Element_Index, Element_Name, Element_Material, Element_Characteristics, 
+                        //          Element_Level, IFC_Class, Concrete_Grade, Freeze_Durability, Water_Resist,
+                        //          Volume_m3, Thickness_m, Width_m, Height_m, Length_m, Area_m2,
+                        //          Work_Name, Work_Unit, TSN_Code, Work_Description, Formula, Parametrization
                         tr.innerHTML = `
                             <td>${row[0] || ''}</td>
                             <td>${row[1] || ''}</td>
-                            <td>${row[2] || ''}</td>
-                            <td>${row[3] || ''}</td>
-                            <td>${row[4] !== null && row[4] !== undefined ? row[4] : ''}</td>
+                            <td>${row[4] || ''}</td>
+                            <td>${row[5] || ''}</td>
+                            <td>${row[6] || ''}</td>
+                            <td>${row[15] || ''}</td>
+                            <td>${row[16] || ''}</td>
+                            <td>${row[17] || ''}</td>
                         `;
                         tbody.appendChild(tr);
                     }
