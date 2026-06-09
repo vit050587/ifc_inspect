@@ -4,11 +4,16 @@
 Скрипт для подбора видов работ к элементам из таблицы full_elements.xlsx
 на основе таблицы Перечень работ КР_new.xlsx с использованием LLM (Ollama + Gemma2:27b)
 
-Алгоритм с применением LLM:
-1. Загружаются элементы и виды работ из Excel файлов
-2. Для каждого элемента формируется контекст (параметры, материал, характеристики)
-3. LLM анализирует элемент и подбирает подходящие работы из справочника
-4. Результат сохраняется в mapped_elements_works.xlsx
+Алгоритм с применением LLM (строго по порядку):
+1. Определить уровень элемента (Подземный/Надземный) для фильтрации разделов работ
+2. По классу элемента выбрать в отфильтрованном по уровню разделе соответствующий подраздел видов работ
+   с таким же классом (Стены->Стены, Колонны->Колонны, Лестницы->Лестницы, Перекрытия/Покрытия->Плиты перекрытия/Покрытия, Фундаменты плиты->Фундаментная плита)
+3. Сопоставить работы согласно параметрам видов работ и соответствующим параметрам элемента 
+   (размеры, площадь, площадь сечения, ширина или толщина) - только в тех видах работ где они указаны
+4. Из отобранных работ подобрать виды работ по материалам и его параметрам (класс бетона, морозостойкость, водонепроницаемость)
+   из которого состоит элемент (если такие условия по материалу присутствуют у вида работы)
+
+Обрабатываются только классы: IfcWall, IfcColumn, IfcStairFlight, IfcSlab, IfcSlabFoundation
 
 Использует Ollama API для подключения к локальной модели.
 """
@@ -25,6 +30,24 @@ import sys
 # Настройки из переменных окружения
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 LLM_MODEL = os.getenv("DRAWING_VALIDATION_MODEL", "gemma2:27b")
+
+# Классы элементов для обработки
+TARGET_IFC_CLASSES = ['IfcWall', 'IfcColumn', 'IfcStairFlight', 'IfcSlab', 'IfcSlabFoundation']
+
+# Маппинг классов элементов к названиям подразделов
+CLASS_TO_SUBSECTION_MAP = {
+    'IfcWall': ['Стен', 'Стена'],
+    'IfcColumn': ['Колонн', 'Колонна'],
+    'IfcStairFlight': ['Лестниц', 'Лестничн', 'Лестница'],
+    'IfcSlab': ['Перекрыт', 'Покрыт', 'Плит', 'Плита'],
+    'IfcSlabFoundation': ['Фундаментн', 'Фундамент', 'Плита', 'фундаментная плита']
+}
+
+# Маппинг уровней к разделам
+LEVEL_TO_SECTION_MAP = {
+    'Подземный': ['Подземн', 'подземная', 'Фундамент'],
+    'Надземный': ['Надземн', 'надземная', 'Цоколь']
+}
 
 
 def parse_concrete_grade(material: str, characteristics: str) -> Optional[str]:
@@ -79,45 +102,19 @@ def determine_ifc_class(row: pd.Series) -> str:
     """Определяет IFC класс элемента по наименованию и другим параметрам"""
     name = str(row.get('Наименование', ''))
     
-    # Элементы без работ
-    if 'Термовкладыш' in name or 'термовкладыш' in name:
-        return 'IfcThermalInsert'
-    
-    if 'Отверст' in name or 'отверст' in name or 'Проем' in name:
-        return 'IfcOpeningElement'
-    
-    if 'Труб' in name and ('Гильз' in name or 'гильз' in name):
-        return 'IfcBuildingElementProxy'
-    
-    # Сопоставление по ключевым словам
+    # Только целевые классы для обработки
     if 'Колонн' in name or 'НесКол' in name:
         return 'IfcColumn'
-    elif 'Балк' in name or 'Ригел' in name:
-        return 'IfcBeam'
     elif 'Стен' in name or 'Диафрагм' in name:
         return 'IfcWall'
     elif 'Плит' in name or 'Перекрыт' in name or 'Покрыт' in name:
-        if 'Фундамент' in name or 'ФП' in name:
+        if 'Фундамент' in name or 'ФП' in name or 'фундаментн' in name.lower():
             return 'IfcSlabFoundation'
         return 'IfcSlab'
     elif 'Лестничн' in name and 'Марш' in name:
         return 'IfcStairFlight'
     elif 'Фундамент' in name and 'плит' not in name.lower():
-        return 'IfcFooting'
-    elif 'Ростверк' in name:
-        return 'IfcFooting'
-    elif 'Арматур' in name:
-        return 'IfcReinforcingBar'
-    elif 'Закладн' in name or 'Пластина' in name:
-        return 'IfcPlate'
-    elif 'Гидрошпонк' in name:
-        return 'IfcDiscreteAccessory'
-    elif 'Приям' in name:
-        return 'IfcSlab'
-    elif 'Рен' in name or 'стяжк' in name.lower() or 'Подготовка' in name:
-        return 'IfcCovering'
-    elif 'Пандус' in name:
-        return 'IfcRamp'
+        return 'IfcSlabFoundation'  # Treat footing as slab foundation
     
     return ''
 
@@ -137,17 +134,9 @@ def get_element_level(row: pd.Series) -> str:
         return level_str
 
 
-def is_element_without_works(ifc_class: str, name: str) -> bool:
-    """Проверяет, является ли элемент элементом без работ"""
-    no_works_classes = ['IfcOpeningElement', 'IfcBuildingElementProxy', 'IfcThermalInsert']
-    
-    if ifc_class in no_works_classes:
-        return True
-    
-    if 'термовкладыш' in name.lower():
-        return True
-    
-    return False
+def is_target_element(ifc_class: str) -> bool:
+    """Проверяет, является ли элемент целевым классом для обработки"""
+    return ifc_class in TARGET_IFC_CLASSES
 
 
 def get_element_parameters(row: pd.Series) -> Dict:
@@ -173,7 +162,7 @@ def get_element_parameters(row: pd.Series) -> Dict:
         'area_m2': row.get('Площадь, м²', float('nan')),
         'material': material,
         'characteristics': characteristics,
-        'no_works': is_element_without_works(ifc_class, name)
+        'is_target': is_target_element(ifc_class)
     }
     
     return params
@@ -217,65 +206,177 @@ def format_element_for_prompt(element_params: Dict) -> str:
     return "\n".join(lines)
 
 
-def select_candidate_works(element_params: Dict, works_df: pd.DataFrame, max_candidates: int = 50) -> pd.DataFrame:
+def find_section_range_by_level(works_df: pd.DataFrame, level: str) -> tuple:
     """
-    Предварительно отбирает кандидатуры работ на основе базовых фильтров
-    перед отправкой к LLM
+    Находит диапазон строк в таблице работ, соответствующий уровню элемента
+    
+    Args:
+        works_df: DataFrame с работами
+        level: Уровень элемента ('Подземный', 'Надземный')
+        
+    Returns:
+        (start_idx, end_idx) или None если не найдено
     """
-    if element_params['no_works']:
+    # Определяем ключевые слова для поиска раздела по уровню
+    if level == 'Подземный':
+        keywords = ['Подземн', 'подземная', 'Фундамент']
+    elif level == 'Надземный':
+        keywords = ['Надземн', 'надземная', 'Цоколь']
+    else:
+        return (0, len(works_df))
+    
+    start_idx = None
+    end_idx = None
+    
+    for idx, row in works_df.iterrows():
+        num = str(row.get('№ п/п', '')) if pd.notna(row.get('№ п/п', '')) else ''
+        name = str(row.get('Наименование работ', '')) if pd.notna(row.get('Наименование работ', '')) else ''
+        
+        # Ищем начало раздела по ключевым словам в № п/п или Наименовании
+        text_to_check = num + ' ' + name
+        if 'Раздел' in num:
+            # Это новый раздел - сбрасываем
+            if start_idx is not None and end_idx is None:
+                # Предыдущий раздел закончился
+                end_idx = idx - 1
+        
+        # Проверяем, подходит ли раздел по уровню
+        has_keyword = any(kw.lower() in text_to_check.lower() for kw in keywords)
+        if 'Раздел' in num and has_keyword:
+            start_idx = idx
+            end_idx = None  # Сбрасываем конец, пока ищем следующий раздел
+    
+    # Если нашли начало, но не нашли конец - берем до конца файла или до следующего раздела
+    if start_idx is not None and end_idx is None:
+        # Ищем следующий раздел
+        for idx in range(start_idx + 1, len(works_df)):
+            row = works_df.iloc[idx]
+            num = str(row.get('№ п/п', '')) if pd.notna(row.get('№ п/п', '')) else ''
+            if 'Раздел' in num:
+                end_idx = idx - 1
+                break
+        if end_idx is None:
+            end_idx = len(works_df) - 1
+    
+    if start_idx is not None:
+        return (start_idx, end_idx)
+    
+    # Если не нашли точного совпадения, возвращаем весь файл
+    return (0, len(works_df) - 1)
+
+
+def find_subsection_by_class(works_df: pd.DataFrame, ifc_class: str, start_idx: int, end_idx: int) -> tuple:
+    """
+    Находит подраздел в пределах диапазона, соответствующий классу элемента
+    
+    Args:
+        works_df: DataFrame с работами
+        ifc_class: IFC класс элемента
+        start_idx: Начальный индекс диапазона
+        end_idx: Конечный индекс диапазона
+        
+    Returns:
+        (sub_start_idx, sub_end_idx) или None если не найдено
+    """
+    # Получаем ключевые слова для данного класса
+    keywords = CLASS_TO_SUBSECTION_MAP.get(ifc_class, [])
+    if not keywords:
+        return (start_idx, end_idx)
+    
+    sub_start = None
+    sub_end = None
+    
+    for idx in range(start_idx, min(end_idx + 1, len(works_df))):
+        row = works_df.iloc[idx]
+        num = str(row.get('№ п/п', '')) if pd.notna(row.get('№ п/п', '')) else ''
+        
+        # Ищем Подраздел с нужными ключевыми словами
+        if 'Подраздел' in num:
+            # Если уже нашли предыдущий подраздел, завершаем его
+            if sub_start is not None and sub_end is None:
+                sub_end = idx - 1
+            
+            # Проверяем, подходит ли этот подраздел по классу
+            has_keyword = any(kw.lower() in num.lower() for kw in keywords)
+            if has_keyword:
+                sub_start = idx
+                sub_end = None
+        
+        # Также проверяем IFC класс в строке
+        work_ifc = str(row.get('IFC класс', '')) if pd.notna(row.get('IFC класс', '')) else ''
+        if ifc_class.lower() in work_ifc.lower() and sub_start is None:
+            # Если нашли строку с matching IFC классом до подразделения
+            pass
+    
+    # Если нашли начало, но не нашли конец - берем до конца диапазона
+    if sub_start is not None and sub_end is None:
+        sub_end = end_idx
+    
+    if sub_start is not None:
+        return (sub_start, sub_end)
+    
+    # Если не нашли подраздел, возвращаем весь диапазон
+    return (start_idx, end_idx)
+
+
+def select_candidate_works_with_structure(element_params: Dict, works_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Отбирает кандидатуры работ по структуре документа:
+    1. Сначала фильтруем по уровню (Подземный/Надземный) - находим нужный раздел
+    2. Затем по классу элемента - находим нужный подраздел
+    3. В пределах подраздела берем все работы с подходящим IFC классом
+    
+    Args:
+        element_params: Параметры элемента
+        works_df: DataFrame с работами
+        
+    Returns:
+        DataFrame с кандидатами работ
+    """
+    if not element_params['is_target']:
         return pd.DataFrame()
     
-    element_ifc = element_params['ifc_class'].lower()
+    element_ifc = element_params['ifc_class']
     element_level = element_params['level']
     
-    candidates = []
+    print(f"  Поиск работ для {element_ifc} ({element_level})...")
     
-    for idx, work_row in works_df.iterrows():
-        work_ifc = str(work_row.get('IFC класс', ''))
+    # Шаг 1: Находим раздел по уровню
+    section_start, section_end = find_section_range_by_level(works_df, element_level)
+    print(f"  Раздел: строки {section_start}-{section_end}")
+    
+    # Шаг 2: Находим подраздел по классу элемента
+    sub_start, sub_end = find_subsection_by_class(works_df, element_ifc, section_start, section_end)
+    print(f"  Подраздел: строки {sub_start}-{sub_end}")
+    
+    # Шаг 3: В пределах подраздела отбираем работы
+    candidates = []
+    for idx in range(sub_start, min(sub_end + 1, len(works_df))):
+        work_row = works_df.iloc[idx]
+        work_name = str(work_row.get('Наименование работ', '')) if pd.notna(work_row.get('Наименование работ', '')) else ''
         
-        # Базовая фильтрация по IFC классу
-        if pd.notna(work_ifc) and work_ifc not in ['не моделируется', 'чаще всего не моделируется', '-', '']:
-            work_ifcs = [x.strip().lower() for x in str(work_ifc).split('\n')]
-            
-            ifc_match = False
-            for w_ifc in work_ifcs:
-                if w_ifc in ['не моделируется', 'чаще всего не моделируется', '-', '']:
-                    continue
-                
-                if element_ifc == w_ifc:
-                    ifc_match = True
-                    break
-                
-                # Особые случаи
-                if element_ifc == 'ifcslabfoundation' and w_ifc in ['ifcslab', 'ifcfooting']:
-                    ifc_match = True
-                    break
-            
-            if not ifc_match:
-                continue
+        # Пропускаем заголовки подразделов
+        if 'Подраздел' in work_name or not work_name.strip():
+            continue
         
-        # Фильтрация по уровню (если возможно определить)
-        work_name = str(work_row.get('Наименование работ', '')).lower()
+        # Проверяем, что это не заголовок материала (обычно следует после основной работы)
+        # Основная работа обычно имеет номер без точки (1, 2, 3) или с буквой (1а, 1б)
+        num = str(work_row.get('№ п/п', '')) if pd.notna(work_row.get('№ п/п', '')) else ''
         
-        if element_level == 'Подземный':
-            if 'надземн' in work_name and 'подземн' not in work_name:
-                continue
-        elif element_level == 'Надземный':
-            if 'подземн' in work_name and 'надземн' not in work_name:
-                continue
-        
+        # Добавляем работу в кандидаты
         candidates.append(work_row)
     
-    if len(candidates) > max_candidates:
-        # Если кандидатов слишком много, берем первые max_candidates
-        candidates = candidates[:max_candidates]
-    
-    return pd.DataFrame(candidates)
+    print(f"  Найдено кандидатов: {len(candidates)}")
+    return pd.DataFrame(candidates) if candidates else pd.DataFrame()
 
 
 def match_works_with_llm(element_params: Dict, candidate_works: pd.DataFrame) -> List[Dict]:
     """
     Использует LLM для подбора работ к элементу из списка кандидатов
+    
+    Алгоритм LLM:
+    1. Фильтрация по параметрам (толщина, ширина, высота, площадь, объем)
+    2. Фильтрация по материалу (класс бетона, морозостойкость, водонепроницаемость)
     
     Args:
         element_params: Параметры элемента
@@ -284,13 +385,13 @@ def match_works_with_llm(element_params: Dict, candidate_works: pd.DataFrame) ->
     Returns:
         Список подобранных работ
     """
-    if candidate_works.empty or element_params['no_works']:
+    if candidate_works.empty or not element_params['is_target']:
         return []
     
     # Формируем описание элемента
     element_description = format_element_for_prompt(element_params)
     
-    # Формируем список работ для анализа (ограничиваем размер)
+    # Формируем список работ для анализа
     works_list = []
     for idx, work_row in candidate_works.iterrows():
         work_info = {
@@ -312,7 +413,7 @@ def match_works_with_llm(element_params: Dict, candidate_works: pd.DataFrame) ->
     for i in range(0, len(works_list), max_works_per_request):
         batch = works_list[i:i + max_works_per_request]
         
-        # Формируем промпт для LLM
+        # Формируем промпт для LLM с акцентом на параметры и материалы
         works_text = ""
         for j, work in enumerate(batch):
             works_text += f"{j + 1}. [{work['idx']}] {work['name']}\n"
@@ -328,23 +429,31 @@ def match_works_with_llm(element_params: Dict, candidate_works: pd.DataFrame) ->
 ЭЛЕМЕНТ:
 {element_description}
 
-СПИСОК РАБОТ-КАНДИДАТОВ:
+СПИСОК РАБОТ-КАНДИДАТОВ (уже отобраны по уровню и типу конструкции):
 {works_text}
 
-ИНСТРУКЦИЯ:
-Проанализируй элемент и выбери из списка ТОЛЬКО те работы, которые действительно подходят этому элементу.
-Учитывай:
-1. Тип элемента (IFC класс) - работа должна соответствовать типу конструкции
-2. Уровень расположения (подземный/надземный) - если указано в названии работы
-3. Параметры элемента (размеры, объем, площадь) - сверяй с ограничениями в графе "Параметры"
-4. Материал элемента (класс бетона, морозостойкость, водонепроницаемость) - сверяй с требованиями в графе "Параметры"
-5. Семантику работы - работа должна иметь смысл для данного типа элемента
+ИНСТРУКЦИЯ ПО ПОДБОРУ (строго по порядку):
+
+ШАГ 1 - ФИЛЬТРАЦИЯ ПО ПАРАМЕТРАМ:
+Проверь параметры элемента против ограничений в графе "Параметризация":
+- Если указано t<XXX мм - сравни с толщиной элемента
+- Если указано a<XXX мм - сравни с размером сечения (ширина/высота)  
+- Если указано S<XXX м2 - сравни с площадью элемента
+- Если указано V>XXX м3 - сравни с объемом элемента
+Отбери работы где параметры элемента соответствуют ограничениям.
+
+ШАГ 2 - ФИЛЬТРАЦИЯ ПО МАТЕРИАЛАМ:
+Из оставшихся работ выбери те где требования к материалу совпадают с элементом:
+- Класс бетона (В25, В30, В35 и т.д.)
+- Морозостойкость (F100, F150, F200 и т.д.)
+- Водонепроницаемость (W4, W6, W8 и т.д.)
+Если у работы нет требований к материалу - она подходит любому элементу своего типа.
 
 ВАЖНО:
-- Не выбирай работы которые явно не подходят (например, опалубка для немонолитных элементов)
-- Учитывай параметрические ограничения (t<XXX, V>XXX, S<XXX и т.д.)
-- Если параметров нет в работе - она может подойти любому элементу своего типа
-- Исключи дубликаты
+- Не выбирай работы которые явно не подходят по смыслу
+- Учитывай параметрические ограничения строго
+- Если параметров нет в работе - она может подойти
+- Исключи дубликаты (работы с одинаковым названием)
 
 Ответь ТОЛЬКО списком номеров работ из списка выше которые подходят, в формате:
 [1, 3, 5]
@@ -408,7 +517,7 @@ def match_works_with_llm(element_params: Dict, candidate_works: pd.DataFrame) ->
         except Exception as e:
             print(f"   ❌ Ошибка при запросе к LLM: {e}")
     
-    # Удаляем дубликаты
+    # Удаляем дубликаты по названию работы
     seen = set()
     unique_works = []
     for work in matched_works:
@@ -421,7 +530,7 @@ def match_works_with_llm(element_params: Dict, candidate_works: pd.DataFrame) ->
 
 
 def load_and_prepare_works(works_file: str) -> pd.DataFrame:
-    """Загружает таблицу работ"""
+    """Загружает таблицу работ без фильтрации - нужна полная структура"""
     print(f"Загрузка таблицы работ из {works_file}...")
     
     try:
@@ -434,12 +543,8 @@ def load_and_prepare_works(works_file: str) -> pd.DataFrame:
     
     print(f"Виды работ: {len(df_works)} строк")
     
-    # Фильтруем заголовки разделов
-    valid_works_mask = df_works['IFC класс'].notna() | df_works['Шифр ТСН'].notna()
-    df_works_valid = df_works[valid_works_mask].copy()
-    print(f"Валидных видов работ: {len(df_works_valid)}")
-    
-    return df_works_valid
+    # Не фильтруем - нужны все строки включая заголовки разделов и подразделов
+    return df_works
 
 
 def check_ollama_availability() -> bool:
@@ -499,6 +604,13 @@ def main(session_folder=None):
     print(f"Модель: {LLM_MODEL}")
     print(f"Ollama URL: {OLLAMA_BASE_URL}")
     print("=" * 60)
+    print("\nАЛГОРИТМ РАБОТЫ:")
+    print("1. Определение уровня элемента (Подземный/Надземный)")
+    print("2. Выбор раздела работ по уровню")
+    print("3. Выбор подраздела работ по классу элемента")
+    print("4. Фильтрация работ по параметрам (LLM)")
+    print("5. Фильтрация работ по материалам (LLM)")
+    print("=" * 60)
     
     # Проверяем доступность Ollama
     ollama_available = check_ollama_availability()
@@ -514,13 +626,14 @@ def main(session_folder=None):
     # Загружаем работы
     df_works_valid = load_and_prepare_works(works_file)
     
-    # Предварительная фильтрация элементов без работ
-    print("\nПредварительная фильтрация элементов...")
+    # Фильтрация элементов по целевым классам
+    print("\nФильтрация элементов по целевым классам...")
+    print(f"Целевые классы: {', '.join(TARGET_IFC_CLASSES)}")
     valid_element_indices = []
     for idx in range(len(df_elements)):
         element_row = df_elements.iloc[idx]
         params = get_element_parameters(element_row)
-        if not params['no_works'] and params['ifc_class']:
+        if params['is_target'] and params['ifc_class']:
             valid_element_indices.append(idx)
     
     print(f"Элементов для обработки: {len(valid_element_indices)}")
@@ -540,8 +653,8 @@ def main(session_folder=None):
         element_row = df_elements.iloc[idx]
         element_params = get_element_parameters(element_row)
         
-        # Предварительный отбор кандидатов
-        candidate_works = select_candidate_works(element_params, df_works_valid)
+        # Предварительный отбор кандидатов по структуре документа
+        candidate_works = select_candidate_works_with_structure(element_params, df_works_valid)
         
         if candidate_works.empty:
             elements_without_works.add(idx)
@@ -643,6 +756,7 @@ def main(session_folder=None):
         'elements_without_works': len(elements_without_works),
         'total_matches': len(df_results)
     }
+        
 
 
 if __name__ == '__main__':
