@@ -5,7 +5,7 @@
 Логика работы:
 1. Читает число из файла height.txt в папке сессии
 2. Открывает файл data/Перечень работ КР.xlsx, лист "ВОР КР+расценки"
-3. В столбце F находит строки с переменной "H" (например: "H<30 м", "30<H<40 м", "t>300 мм\n57<H<75 м")
+3. В столбце J находит строки с переменной "H" (например: "H<30 м", "30<H<40 м", "57<H<75 м\nКаркасы")
 4. Подставляет высоту из height.txt вместо "H" и проверяет условие
 5. Оставляет только строки, где условие выполняется ИЛИ где нет условий с H
 6. Сохраняет новый файл Перечень работ КР_new.xlsx в папке сессии
@@ -186,23 +186,23 @@ def filter_works_by_height(session_folder, source_excel_path=None):
                 filtered_row_count += 1
                 continue
             
-            # Проверяем, есть ли в строке столбец F (индекс 5)
-            if len(row) <= 5:
-                # Если столбца F нет, просто копируем строку
+            # Проверяем, есть ли в строке столбец J (индекс 9)
+            if len(row) <= 9:
+                # Если столбца J нет, просто копируем строку
                 ws_result.append(row)
                 filtered_row_count += 1
                 continue
             
-            f_value = row[5]  # Столбец F (0-индексированный)
+            j_value = row[9]  # Столбец J (0-индексированный)
             
-            # Если в столбце F есть текст с H, проверяем условие
-            if f_value and isinstance(f_value, str) and 'H' in f_value:
-                if parse_height_condition(f_value, building_height):
+            # Если в столбце J есть текст с H, проверяем условие
+            if j_value and isinstance(j_value, str) and 'H' in j_value:
+                if parse_height_condition(j_value, building_height):
                     ws_result.append(row)
                     filtered_row_count += 1
                 # else: строка отфильтрована
             else:
-                # Если нет H в столбце F, копируем строку
+                # Если нет H в столбце J, копируем строку
                 ws_result.append(row)
                 filtered_row_count += 1
         
