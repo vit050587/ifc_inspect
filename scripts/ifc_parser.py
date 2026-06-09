@@ -326,16 +326,10 @@ def extract_element_properties(element, psets):
     if getattr(element, 'Tag', None):
         data["Element Specific:Tag"] = getattr(element, 'Tag', None)
     
-    # Динамическое извлечение всех параметров из psets
+    # Динамическое извлечение всех параметров из psets (включая сложные объекты)
     for pset_name, props in psets.items():
         for prop_name, prop_value in props.items():
             if prop_value is not None and prop_name != 'id':
-                # Пропускаем сложные объекты IFC, которые нельзя конвертировать в Excel
-                if hasattr(prop_value, 'is_a') or isinstance(prop_value, dict):
-                    continue
-                # Пропускаем списки и кортежи
-                if isinstance(prop_value, (list, tuple, set)):
-                    continue
                 # Формируем ключ в формате "PsetName:PropertyName"
                 key = f"{pset_name}:{prop_name}"
                 data[key] = prop_value
@@ -816,29 +810,13 @@ def create_full_elements_excel(data, output_path):
     ws = wb.active
     ws.title = "Все элементы"
     
-    # Основные колонки согласно требованиям
-    main_headers = [
-        "Наименование",
-        "Код IFC",
-        "Подземный/Надземный",
-        "Ширина, м",
-        "Высота, м",
-        "Длина, м",
-        "Толщина, м",
-        "Объем, м³",
-        "Площадь, м²",
-        "Материал",
-        "Характеристики материала"
-    ]
-    
-    # Добавляем все остальные колонки из данных элементов
-    # Собираем все уникальные ключи из всех элементов
+    # Собираем все уникальные ключи из всех элементов (только те, что есть в модели)
     all_data_keys = set()
     for item in data:
         all_data_keys.update(item.keys())
     
-    # Формируем заголовки: основные + все остальные из данных
-    all_headers = main_headers + [col for col in sorted(all_data_keys) if col not in main_headers]
+    # Формируем заголовки: только те колонки, которые реально есть в данных
+    all_headers = sorted(all_data_keys)
     
     # Стили
     header_font = Font(bold=True, color="FFFFFF")
@@ -859,102 +837,17 @@ def create_full_elements_excel(data, output_path):
     
     # Записываем данные
     for row_idx, item in enumerate(data, 2):
-        # Наименование
-        name = item.get("Element Specific:Name") or item.get("Element Specific:LongName") or ""
-        ws.cell(row=row_idx, column=1, value=name).border = thin_border
-        
-        # Код IFC
-        ifc_code = item.get("ExpCheck_Beam:MGE_ElementCode") or \
-                   item.get("ExpCheck_Column:MGE_ElementCode") or \
-                   item.get("ExpCheck_Slab:MGE_ElementCode") or \
-                   item.get("ExpCheck_Wall:MGE_ElementCode") or \
-                   item.get("ExpCheck_Ramp:MGE_ElementCode") or \
-                   item.get("ExpCheck_StairFlight:MGE_ElementCode") or ""
-        ws.cell(row=row_idx, column=2, value=ifc_code).border = thin_border
-        
-        # Подземный/Надземный
-        above_ground = item.get("Pset_BuildingStoreyCommon:AboveGround")
-        storey_elevation = None
-        # Пытаемся определить по этажу
-        if hasattr(item.get("Storey"), 'Elevation'):
-            storey_elevation = item["Storey"].Elevation
-        elif isinstance(item.get("Storey"), (int, float)):
-            storey_elevation = item["Storey"]
-        
-        if storey_elevation is not None:
-            underground_status = "Подземный" if storey_elevation < 0 else "Надземный"
-        elif above_ground is not None:
-            underground_status = "Надземный" if above_ground else "Подземный"
-        else:
-            underground_status = "Не определено"
-        ws.cell(row=row_idx, column=3, value=underground_status).border = thin_border
-        
-        # Размеры (извлекаем из Qto quantities)
-        width = item.get("Qto_OpeningElementBaseQuantities:Width") or \
-                item.get("Qto_SlabBaseQuantities:Width") or \
-                item.get("Qto_WallBaseQuantities:Width") or ""
-        height = item.get("Qto_OpeningElementBaseQuantities:Height") or \
-                 item.get("Qto_WallBaseQuantities:Height") or ""
-        length = item.get("Qto_BeamBaseQuantities:Length") or \
-                 item.get("Qto_ColumnBaseQuantities:Length") or \
-                 item.get("Qto_MemberBaseQuantities:Length") or \
-                 item.get("Qto_SlabBaseQuantities:Width") or \
-                 item.get("Qto_WallBaseQuantities:Length") or ""
-        thickness = item.get("Qto_WallBaseQuantities:Width") or \
-                    item.get("Qto_SlabBaseQuantities:Width") or ""
-        
-        ws.cell(row=row_idx, column=4, value=width).border = thin_border
-        ws.cell(row=row_idx, column=5, value=height).border = thin_border
-        ws.cell(row=row_idx, column=6, value=length).border = thin_border
-        ws.cell(row=row_idx, column=7, value=thickness).border = thin_border
-        
-        # Объем и площадь
-        ws.cell(row=row_idx, column=8, value=item.get("volume_m3", "")).border = thin_border
-        ws.cell(row=row_idx, column=9, value=item.get("area_m2", "")).border = thin_border
-        
-        # Материал
-        material = item.get("material", "")
-        concrete_class = item.get("concrete_class", "")
-        frost = item.get("frost_resistance", "")
-        water = item.get("water_permeability", "")
-        
-        material_parts = [material] if material else []
-        if concrete_class:
-            material_parts.append(concrete_class)
-        if frost:
-            material_parts.append(frost)
-        if water:
-            material_parts.append(water)
-        
-        material_str = " ".join(material_parts) if material_parts else ""
-        ws.cell(row=row_idx, column=10, value=material_str).border = thin_border
-        
-        # Характеристики материала (полное описание)
-        material_detail = item.get("material_detail", "")
-        char_parts = []
-        if concrete_class:
-            char_parts.append(f"Класс бетона: {concrete_class}")
-        if frost:
-            char_parts.append(f"Морозостойкость: {frost}")
-        if water:
-            char_parts.append(f"Водонепроницаемость: {water}")
-        if material_detail:
-            char_parts.append(f"Тип: {material_detail}")
-        
-        char_str = "; ".join(char_parts) if char_parts else ""
-        ws.cell(row=row_idx, column=11, value=char_str).border = thin_border
-        
-        # Остальные колонки из данных элементов
-        for col_idx, header in enumerate(all_headers[11:], 12):
+        # Записываем все параметры из элемента по порядку заголовков
+        for col_idx, header in enumerate(all_headers, 1):
             value = item.get(header, "")
-            # Преобразуем сложные объекты в строку или пропускаем
+            # Преобразуем сложные объекты в строку
             if isinstance(value, dict):
                 value = str(value)
             elif hasattr(value, 'is_a'):
                 value = str(value)
             elif isinstance(value, (list, tuple, set)):
                 value = ", ".join(str(v) for v in value)
-            ws.cell(row=row_idx, column=col_idx + 11, value=value).border = thin_border
+            ws.cell(row=row_idx, column=col_idx, value=value).border = thin_border
     
     # Авто-ширина колонок
     for col in ws.columns:

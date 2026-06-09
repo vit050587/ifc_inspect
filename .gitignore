@@ -4,76 +4,18 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.Python
-env/
-venv/
-.venv/
-.ENV
-.venv.bak/
-pip-log.txt
-pip-delete-this-directory.txt
-.tox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
+
+# Logs and temp files
 *.log
-*.pot
-*.po
-*~
-.pytest_cache/
-.mypy_cache/
-.hypothesis/
-
-# Generated / Distribution
-dist/
-build/
-*.egg-info/
-.eggs/
-.installed.cfg
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg
-share/python-wheels/
-
-# IDE
-.vscode/
-.idea/
+*.tmp
 *.swp
-*.swo
-*~
-
-# System
-.DS_Store
-Thumbs.db
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Icon?
-desktop.ini
 
 # Environment
 .env
 .env.local
-.env.*
-!requirements.txt
-!Pipfile
-!Pipfile.lock
+*.env.*
 
-# Logs
-*.log
-
-# Coverage
-htmlcov/
-.coverage.*
-.coverage
-coverage.xml
+# Editors
+.vscode/
+.idea/
 ```
