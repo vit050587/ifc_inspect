@@ -683,6 +683,8 @@ def find_works_for_element(element_row: pd.Series, works_df: pd.DataFrame,
     has_specific_works = False  # Флаг: есть ли специфичные работы для этого IFC класса в нужном разделе
     
     # Выбираем работы из соответствующего раздела
+    # ВАЖНО: Если уровень элемента НЕ определен, то НЕ берем специфичные работы по IFC классу
+    # а используем только универсальные работы. Это предотвращает попадание лишних работ.
     if element_level == 'Подземный':
         # Для подземных элементов берем работы из подземного раздела
         if element_ifc in works_underground:
@@ -695,18 +697,11 @@ def find_works_for_element(element_row: pd.Series, works_df: pd.DataFrame,
             for _, work_row in works_aboveground[element_ifc].iterrows():
                 candidate_works.append(work_row)
                 has_specific_works = True
-    else:
-        # Если уровень не определен, пробуем оба раздела
-        if element_ifc in works_underground:
-            for _, work_row in works_underground[element_ifc].iterrows():
-                candidate_works.append(work_row)
-                has_specific_works = True
-        if element_ifc in works_aboveground:
-            for _, work_row in works_aboveground[element_ifc].iterrows():
-                candidate_works.append(work_row)
-                has_specific_works = True
+    # Если уровень не определен - НЕ берем специфичные работы по IFC классу
+    # has_specific_works остается False и будут использованы только универсальные работы
     
     # Добавляем универсальные работы ТОЛЬКО если нет специфичных работ для этого IFC класса
+    # или если уровень элемента не определен
     if not has_specific_works and works_universal is not None and len(works_universal) > 0:
         for _, work_row in works_universal.iterrows():
             candidate_works.append(work_row)
@@ -756,25 +751,22 @@ def load_and_prepare_works(works_file: str) -> Tuple[pd.DataFrame, Dict, Dict, p
     print(f"Валидных видов работ: {len(df_works_valid)}")
     
     # Определяем текущий раздел для каждой строки
-    # Разделы определяются по строкам в колонке "№ п/п" содержащим "Раздел" или "Подраздел"
-    # или по строкам в "Наименование работ" содержащим "Подземная часть" или "Надземная часть"
+    # Разделы определяются по строкам в колонке "Наименование работ" содержащим "Подземная часть здания" или "Надземная часть здания"
+    # Важно: ищем именно заголовки высокого уровня, а не подразделы
     
     current_section = None  # 'underground', 'aboveground', 'other'
     section_column = []
     
     for idx, row in df_works.iterrows():
-        num = str(row['№ п/п']) if pd.notna(row['№ п/п']) else ''
         name = str(row['Наименование работ']) if pd.notna(row['Наименование работ']) else ''
         
-        # Проверяем является ли строка заголовком раздела
-        if 'Подземн' in name:
+        # Проверяем является ли строка заголовком основного раздела
+        # Ищем именно главные разделы, а не подразделы
+        if 'Подземная часть здания' in name and 'Подраздел' not in name:
             current_section = 'underground'
-        elif 'Надземн' in name:
+        elif 'Надземная часть здания' in name and 'Подраздел' not in name:
             current_section = 'aboveground'
-        elif 'Раздел' in num or 'Подраздел' in num:
-            # Определяем раздел по контексту - смотрим предыдущие строки
-            # Если это подраздел, он наследует раздел от последнего глобального раздела
-            pass  # current_section остается прежним
+        # Подразделы наследуют текущий раздел
         
         section_column.append(current_section)
     
