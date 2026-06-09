@@ -12,8 +12,7 @@ venv/
 .env.local
 .env.*
 
-# Excel files (test artifacts)
-*.xlsx
+
 
 # Logs
 *.log
