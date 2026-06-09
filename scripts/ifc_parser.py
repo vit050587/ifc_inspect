@@ -330,6 +330,12 @@ def extract_element_properties(element, psets):
     for pset_name, props in psets.items():
         for prop_name, prop_value in props.items():
             if prop_value is not None and prop_name != 'id':
+                # Пропускаем сложные объекты IFC, которые нельзя конвертировать в Excel
+                if hasattr(prop_value, 'is_a') or isinstance(prop_value, dict):
+                    continue
+                # Пропускаем списки и кортежи
+                if isinstance(prop_value, (list, tuple, set)):
+                    continue
                 # Формируем ключ в формате "PsetName:PropertyName"
                 key = f"{pset_name}:{prop_name}"
                 data[key] = prop_value
@@ -941,6 +947,13 @@ def create_full_elements_excel(data, output_path):
         # Остальные колонки из данных элементов
         for col_idx, header in enumerate(all_headers[11:], 12):
             value = item.get(header, "")
+            # Преобразуем сложные объекты в строку или пропускаем
+            if isinstance(value, dict):
+                value = str(value)
+            elif hasattr(value, 'is_a'):
+                value = str(value)
+            elif isinstance(value, (list, tuple, set)):
+                value = ", ".join(str(v) for v in value)
             ws.cell(row=row_idx, column=col_idx + 11, value=value).border = thin_border
     
     # Авто-ширина колонок
@@ -1185,6 +1198,7 @@ def parse_ifc_file(ifc_path, output_folder):
         'success': True,
         'total_elements': len(data),
         'height_m': height_m,
+        'excel_filename': 'full_elements.xlsx',
         'full_elements_file': 'full_elements.xlsx',
         'elements_json_file': 'elements.json',
         'height_file': 'height.txt'
