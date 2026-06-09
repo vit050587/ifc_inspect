@@ -808,12 +808,13 @@ def map_elements_to_works(session_folder=None):
 
 def main(session_folder=None):
     # Пути к файлам - используем аргументы командной строки или значения по умолчанию
-    if len(sys.argv) >= 4:
+    # Проверяем, что скрипт запущен напрямую из командной строки с аргументами
+    if session_folder is None and len(sys.argv) >= 4:
         elements_file = sys.argv[1]
         works_file = sys.argv[2]
         output_file = sys.argv[3]
     elif session_folder:
-        # Используем папку сессии
+        # Используем папку сессии (вызов из Flask)
         elements_file = os.path.join(session_folder, 'full_elements.xlsx')
         works_file = os.path.join(session_folder, 'Перечень работ КР_new.xlsx')
         output_file = os.path.join(session_folder, 'mapped_elements_works.xlsx')
