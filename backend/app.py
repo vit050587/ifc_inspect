@@ -234,16 +234,29 @@ def process_files():
     print("="*60)
     
     try:
-        mapping_result = map_elements_to_works(session_folder)
-        if mapping_result.get('success'):
-            results['mapping'] = mapping_result
-            session_info['mapping_completed'] = True
-            session_info['mapped_elements_works_file'] = mapping_result.get('output_file')
-            print(f"✅ Маппинг завершен: {mapping_result.get('output_file')}")
-            print(f"   Смаппировано {mapping_result.get('matched_elements', 0)} из {mapping_result.get('total_elements', 0)} элементов")
+        # Проверяем наличие необходимых файлов перед запуском маппинга
+        elements_excel_file = os.path.join(session_folder, 'full_elements.xlsx')
+        works_filtered_file = os.path.join(session_folder, 'Перечень работ КР_new.xlsx')
+        
+        if not os.path.exists(elements_excel_file):
+            print(f"⚠️ Файл full_elements.xlsx не найден: {elements_excel_file}")
+            session_info['mapping_error'] = 'Файл full_elements.xlsx не найден'
+            results['mapping'] = {'success': False, 'error': 'Elements Excel file not found'}
+        elif not os.path.exists(works_filtered_file):
+            print(f"⚠️ Файл Перечень работ КР_new.xlsx не найден: {works_filtered_file}")
+            session_info['mapping_error'] = 'Файл работ не найден'
+            results['mapping'] = {'success': False, 'error': 'Works file not found'}
         else:
-            print(f"⚠️ Маппинг не выполнен: {mapping_result.get('error', 'Unknown error')}")
-            session_info['mapping_error'] = mapping_result.get('error', 'Unknown error')
+            mapping_result = map_elements_to_works(session_folder)
+            if mapping_result.get('success'):
+                results['mapping'] = mapping_result
+                session_info['mapping_completed'] = True
+                session_info['mapped_elements_works_file'] = mapping_result.get('output_file')
+                print(f"✅ Маппинг завершен: {mapping_result.get('output_file')}")
+                print(f"   Смаппировано {mapping_result.get('matched_elements', 0)} из {mapping_result.get('total_elements', 0)} элементов")
+            else:
+                print(f"⚠️ Маппинг не выполнен: {mapping_result.get('error', 'Unknown error')}")
+                session_info['mapping_error'] = mapping_result.get('error', 'Unknown error')
     except Exception as e:
         print(f"❌ Ошибка маппинга: {e}")
         session_info['mapping_error'] = str(e)
