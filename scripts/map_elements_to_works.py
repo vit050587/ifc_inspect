@@ -661,7 +661,11 @@ def find_works_for_element(element_row: pd.Series, works_df: pd.DataFrame,
     1. Определяем уровень элемента (подземный/надземный)
     2. Выбираем работы ТОЛЬКО из соответствующего раздела (подземные/надземные)
     3. Проверяем IFC класс, параметры и материал
-    4. Добавляем универсальные работы (без привязки к уровню)
+    4. Добавляем универсальные работы ТОЛЬКО если для данного IFC класса нет работ в соответствующем разделе
+    
+    Ключевое правило:
+    - Если элемент определенного IFC класса и в таблице есть подраздел с этим классом,
+      то смотреть работы нужно ТОЛЬКО в этом подразделе таблицы для этого элемента.
     """
     
     element_params = get_element_parameters(element_row)
@@ -676,6 +680,7 @@ def find_works_for_element(element_row: pd.Series, works_df: pd.DataFrame,
     
     # Собираем подходящие работы в зависимости от уровня элемента
     candidate_works = []
+    has_specific_works = False  # Флаг: есть ли специфичные работы для этого IFC класса в нужном разделе
     
     # Выбираем работы из соответствующего раздела
     if element_level == 'Подземный':
@@ -683,22 +688,26 @@ def find_works_for_element(element_row: pd.Series, works_df: pd.DataFrame,
         if element_ifc in works_underground:
             for _, work_row in works_underground[element_ifc].iterrows():
                 candidate_works.append(work_row)
+                has_specific_works = True
     elif element_level == 'Надземный':
         # Для надземных элементов берем работы из надземного раздела
         if element_ifc in works_aboveground:
             for _, work_row in works_aboveground[element_ifc].iterrows():
                 candidate_works.append(work_row)
+                has_specific_works = True
     else:
         # Если уровень не определен, пробуем оба раздела
         if element_ifc in works_underground:
             for _, work_row in works_underground[element_ifc].iterrows():
                 candidate_works.append(work_row)
+                has_specific_works = True
         if element_ifc in works_aboveground:
             for _, work_row in works_aboveground[element_ifc].iterrows():
                 candidate_works.append(work_row)
+                has_specific_works = True
     
-    # Добавляем универсальные работы (применяются ко всем уровням)
-    if works_universal is not None and len(works_universal) > 0:
+    # Добавляем универсальные работы ТОЛЬКО если нет специфичных работ для этого IFC класса
+    if not has_specific_works and works_universal is not None and len(works_universal) > 0:
         for _, work_row in works_universal.iterrows():
             candidate_works.append(work_row)
     

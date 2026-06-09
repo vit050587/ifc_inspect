@@ -1,44 +1,46 @@
 ```
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-
-# Excel files (if they are generated/temporary)
+# Excel files
 *.xlsx
 
-# Logs
+# Logs and temp files
 *.log
+*.tmp
+*.swp
 
 # Environment
 .env
 .env.local
 *.env.*
 
-# Dependencies
-.venv/
+# Editors
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
 venv/
-node_modules/
+.venv/
+.env
+.coverage
+htmlcov/
+.coverage.*
+.nox/
+.tox/
+.pytest_cache/
+.mypy_cache/
+.hypothesis/
 
 # Build artifacts
 dist/
 build/
-target/
+*.egg-info/
+*.egg
 
-# Coverage
-.coverage
-coverage/
-htmlcov/
-
-# Editors
-.vscode/
-.idea/
-*.swp
-*.swo
-*.tmp
-
-# System
+# OS generated files
 .DS_Store
 Thumbs.db
 ```
