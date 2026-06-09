@@ -15,7 +15,6 @@ from scripts.draw_detector import extract_drawings_from_explanatory_note
 from scripts.ifc_parser import parse_ifc_file
 from scripts.filter_works_by_height import filter_works_by_height
 from scripts.map_elements_to_works import map_elements_to_works
-from scripts.map_elements_to_works_llm import map_elements_to_works_llm
 
 # xlsx_parser module was removed - IFC parser now handles materials summary creation
 
@@ -259,23 +258,6 @@ def process_files():
             else:
                 print(f"⚠️ Классический маппинг не выполнен: {mapping_result.get('error', 'Unknown error')}")
                 session_info['mapping_error'] = mapping_result.get('error', 'Unknown error')
-            
-            # Шаг 2: Запускаем LLM-маппинг для улучшения результатов
-            try:
-                print("\n🔄 Запуск LLM-маппинга...")
-                llm_mapping_result = map_elements_to_works_llm(session_folder)
-                if llm_mapping_result.get('success'):
-                    results['llm_mapping'] = llm_mapping_result
-                    session_info['llm_mapping_completed'] = True
-                    session_info['mapped_elements_works_llm_file'] = llm_mapping_result.get('output_file')
-                    print(f"✅ LLM-маппинг завершен: {llm_mapping_result.get('output_file')}")
-                    print(f"   Смаппировано {llm_mapping_result.get('matched_elements', 0)} из {llm_mapping_result.get('total_elements', 0)} элементов")
-                else:
-                    print(f"⚠️ LLM-маппинг не выполнен: {llm_mapping_result.get('error', 'Unknown error')}")
-                    session_info['llm_mapping_error'] = llm_mapping_result.get('error', 'Unknown error')
-            except Exception as llm_e:
-                print(f"❌ Ошибка LLM-маппинга: {llm_e}")
-                session_info['llm_mapping_error'] = str(llm_e)
     except Exception as e:
         print(f"❌ Ошибка маппинга: {e}")
         session_info['mapping_error'] = str(e)
@@ -307,8 +289,7 @@ def process_files():
         'ifc_processed': results['ifc_results'] is not None,
         'pdf_classified': results['pdf_classification'] is not None,
         'elements_json_saved': results['elements_json_results'] is not None and results['elements_json_results'].get('success', False),
-        'mapping_completed': results.get('mapping') is not None and results['mapping'].get('success', False),
-        'llm_mapping_completed': results.get('llm_mapping') is not None and results['llm_mapping'].get('success', False)
+        'mapping_completed': results.get('mapping') is not None and results['mapping'].get('success', False)
     }
     
     with open(session_info_path, 'w', encoding='utf-8') as f:
@@ -324,11 +305,9 @@ def process_files():
         'ifc_excel_file': session_info.get('ifc_excel_file'),
         'elements_json_file': session_info.get('elements_json_file'),
         'mapped_elements_works_file': session_info.get('mapped_elements_works_file'),
-        'mapped_elements_works_llm_file': session_info.get('mapped_elements_works_llm_file'),
         'pdf_classification': results['pdf_classification'],
         'elements_json_results': results['elements_json_results'],
         'mapping_results': results.get('mapping'),
-        'llm_mapping_results': results.get('llm_mapping'),
         'summary': session_info['results_summary']
     })
 
