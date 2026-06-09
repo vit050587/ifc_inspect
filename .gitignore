@@ -1,46 +1,10 @@
 ```
-# Excel files
-*.xlsx
-
-# Logs and temp files
-*.log
-*.tmp
-*.swp
-
-# Environment
-.env
-.env.local
-*.env.*
-
-# Editors
-.vscode/
-.idea/
-
 # Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.Python
-venv/
-.venv/
-.env
-.coverage
-htmlcov/
-.coverage.*
-.nox/
-.tox/
-.pytest_cache/
-.mypy_cache/
-.hypothesis/
 
-# Build artifacts
-dist/
-build/
-*.egg-info/
-*.egg
-
-# OS generated files
-.DS_Store
-Thumbs.db
+# Excel files (assuming test artifacts)
+test_session/*.xlsx
 ```
