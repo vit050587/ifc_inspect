@@ -1,5 +1,5 @@
 {
-  "session_id": "44c62382-9ce9-4a00-82be-c7d797f028e1",
+  "session_id": "bd05e972-2dd7-46a7-b339-60c93138b6e9",
   "status": "completed",
   "pdf_files": [
     "ВОР КР.pdf",
@@ -26,8 +26,8 @@
       "volume_statement": [
         {
           "filename": "ВОР КР.pdf",
-          "source_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/44c62382-9ce9-4a00-82be-c7d797f028e1/pdf_documents/ВОР КР.pdf",
-          "dest_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/44c62382-9ce9-4a00-82be-c7d797f028e1/volume_statement/ВОР КР.pdf",
+          "source_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/bd05e972-2dd7-46a7-b339-60c93138b6e9/pdf_documents/ВОР КР.pdf",
+          "dest_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/bd05e972-2dd7-46a7-b339-60c93138b6e9/volume_statement/ВОР КР.pdf",
           "category": "volume_statement",
           "pages_analyzed": 3,
           "file_size": 999778
@@ -36,8 +36,8 @@
       "explanatory_note": [
         {
           "filename": "Текстовая и графическая часть КР.pdf",
-          "source_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/44c62382-9ce9-4a00-82be-c7d797f028e1/pdf_documents/Текстовая и графическая часть КР.pdf",
-          "dest_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/44c62382-9ce9-4a00-82be-c7d797f028e1/explanatory_note/Текстовая и графическая часть КР.pdf",
+          "source_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/bd05e972-2dd7-46a7-b339-60c93138b6e9/pdf_documents/Текстовая и графическая часть КР.pdf",
+          "dest_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/bd05e972-2dd7-46a7-b339-60c93138b6e9/explanatory_note/Текстовая и графическая часть КР.pdf",
           "category": "explanatory_note",
           "pages_analyzed": 3,
           "file_size": 10400384
@@ -52,6 +52,8 @@
   "works_list_output_file": "Перечень работ КР_new.xlsx",
   "mapping_completed": true,
   "mapped_elements_works_file": "mapped_elements_works.xlsx",
+  "llm_mapping_completed": true,
+  "mapped_elements_works_llm_file": "mapped_elements_works_llm.xlsx",
   "results_summary": {
     "text_pages_count": 74,
     "drawing_pages_count": 8,
@@ -59,6 +61,7 @@
     "ifc_processed": true,
     "pdf_classified": true,
     "elements_json_saved": true,
-    "mapping_completed": true
+    "mapping_completed": true,
+    "llm_mapping_completed": true
   }
 }
