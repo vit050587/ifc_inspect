@@ -6,14 +6,15 @@ __pycache__/
 *.pyd
 
 # Dependencies
-venv/
 .venv/
+venv/
+env/
+
+# Environment
 .env
 .env.local
-.env.*
+*.env.*
 
-
-
-# Logs
-*.log
+# Files
+uploads/
 ```
