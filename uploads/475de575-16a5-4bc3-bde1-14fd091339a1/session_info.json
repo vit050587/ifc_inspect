@@ -1,0 +1,15 @@
+{
+  "session_id": "475de575-16a5-4bc3-bde1-14fd091339a1",
+  "status": "files_uploaded",
+  "pdf_files": [
+    "ВОР КР.pdf",
+    "Текстовая и графическая часть КР.pdf"
+  ],
+  "ifc_files": [
+    "ifc модель КР.ifc"
+  ],
+  "excel_files": [
+    "Спецификация по ifc КР.xlsx"
+  ],
+  "other_files": []
+}
