@@ -1,1 +1,20 @@
-Nothing should be ignored based on the provided file changes, as they only include source/config files (.html, .py) without any build artifacts, dependencies, or temporary files.
+```
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Dependencies
+venv/
+.venv/
+.env
+.env.local
+.env.*
+
+# Excel files (test artifacts)
+*.xlsx
+
+# Logs
+*.log
+```

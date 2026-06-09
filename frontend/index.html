@@ -609,7 +609,8 @@
             }
             
             // Show download button and table for mapped elements works Excel (main result)
-            if (data.mapped_elements_works_file) {
+            // Check both mapped_elements_works_file and summary.mapping_completed
+            if (data.mapped_elements_works_file || (data.summary && data.summary.mapping_completed)) {
                 downloadMappedSection.style.display = 'block';
                 mappedTableSection.style.display = 'block';
             }
