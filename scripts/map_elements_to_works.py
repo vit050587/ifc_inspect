@@ -581,16 +581,21 @@ def get_element_parameters(row: pd.Series) -> Dict:
     • B30/F150/W6 ← concrete_class/frost_resistance/water_permeability
     Примечание: H (Height) не используется в условиях параметризации, так как высота здания учитывается на предыдущем этапе.
     """
-    material = row.get('Материал', '')
-    characteristics = row.get('Характеристики материала', '')
+    # Используем правильные имена колонок из таблицы full_elements.xlsx
+    # Имя элемента
+    name = row.get('Element Specific:Name', '')
     
-    # Получаем основные параметры
-    thickness_m = row.get('Толщина, м', float('nan'))
-    width_m = row.get('Ширина, м', float('nan'))
-    height_m = row.get('Высота, м', float('nan'))
-    length_m = row.get('Длина, м', float('nan'))
-    volume_m3 = row.get('Объем, м³', float('nan'))
-    area_m2 = row.get('Площадь, м²', float('nan'))
+    # Материал и характеристики
+    material = row.get('ExpCheck_Wall:MGE_Material', '') or row.get('ExpCheck_Slab:MGE_Material', '') or row.get('ExpCheck_Column:MGE_Material', '') or row.get('ExpCheck_Ramp:MGE_Material', '') or row.get('ExpCheck_Stair:MGE_Material', '') or ''
+    characteristics = row.get('ExpCheck_MaterialConcrete:MGE_ConcreteGrade', '') or ''
+    
+    # Геометрические параметры - используем готовые вычисленные поля если они есть
+    thickness_m = row.get('thickness_m', float('nan'))
+    width_m = row.get('width_m', float('nan'))
+    height_m = row.get('height_m', float('nan'))
+    length_m = row.get('length_m', float('nan'))
+    volume_m3 = row.get('volume_m3', float('nan'))
+    area_m2 = row.get('area_m2', float('nan'))
     
     # Дополнительные поля для маппинга S и V
     net_side_area = row.get('NetSideArea', float('nan'))
@@ -609,8 +614,8 @@ def get_element_parameters(row: pd.Series) -> Dict:
         thickness_m = width_m
     
     params = {
-        'ifc_class': determine_ifc_class(row),
-        'name': row.get('Наименование', ''),
+        'ifc_class': row.get('Ifc Class', ''),  # Берем напрямую из колонки Ifc Class
+        'name': name,
         'level': get_element_level(row),
         'concrete_grade': parse_concrete_grade(material, characteristics),
         'freeze_durability': parse_freeze_durability(material, characteristics),
@@ -861,10 +866,12 @@ def find_works_for_element(element_row: pd.Series, works_df: pd.DataFrame,
         for _, work_row in works_by_level[element_level].iterrows():
             candidate_works.append(work_row)
     
-    # Если не нашли точного совпадения, пробуем найти частичное совпадение (наличие текста)
+    # Если не нашли точного совпадения, пробуем найти частичное совпадение (содержится ли текст категории элемента в названии категории работ)
     if not candidate_works:
         for level_key, level_works in works_by_level.items():
-            if element_level in level_key or level_key in element_level:
+            # Проверяем содержится ли текст категории элемента в названии категории работ
+            # Например: элемент "до отм. 0,000" должен соответствовать работе "Подземная часть здания (до ур. земли до отм. 0,000)"
+            if element_level and element_level in level_key:
                 for _, work_row in level_works.iterrows():
                     candidate_works.append(work_row)
                 break
@@ -899,12 +906,13 @@ def find_works_for_element(element_row: pd.Series, works_df: pd.DataFrame,
         for work_row in candidate_works:
             work_subdivision = str(work_row.get('Подраздел', ''))
             if work_subdivision:
-                # Семантическое сопоставление: проверяем наличие ключевых слов
-                # Пример: "Фундаментная плита" в названии элемента → ищем "Фундаментная плита" в подразделе
-                if work_subdivision.lower() in element_name_lower or element_name_lower in work_subdivision.lower():
+                work_subdivision_lower = work_subdivision.lower()
+                
+                # Прямое совпадение
+                if work_subdivision_lower in element_name_lower or element_name_lower in work_subdivision_lower:
                     filtered_by_subdivision.append(work_row)
                 else:
-                    # Проверяем по ключевым словам
+                    # Проверяем по ключевым словам - более гибкое сопоставление
                     subdivision_keywords = {
                         'фундаментн': ['фундамент', 'плита', 'фп'],
                         'стен': ['стена', 'стен', 'монолит'],
@@ -916,9 +924,38 @@ def find_works_for_element(element_row: pd.Series, works_df: pd.DataFrame,
                     }
                     
                     match_found = False
+                    
+                    # Проверяем: содержит ли подраздел ключевое слово И элемент содержит соответствующее ключевое слово
                     for subdiv_key, keywords in subdivision_keywords.items():
-                        if subdiv_key in work_subdivision.lower():
+                        if subdiv_key in work_subdivision_lower:
                             if any(kw in element_name_lower for kw in keywords):
+                                match_found = True
+                                break
+                    
+                    # Дополнительная проверка: если подраздел содержит "стен" а элемент содержит "стена" (и наоборот)
+                    if not match_found:
+                        # Проверяем морфологические варианты
+                        morphological_pairs = [
+                            ('стена', 'стен'),
+                            ('стены', 'стен'),
+                            ('стену', 'стен'),
+                            ('колонна', 'колонн'),
+                            ('колонны', 'колонн'),
+                            ('балка', 'балк'),
+                            ('балки', 'балк'),
+                            ('плита', 'плит'),
+                            ('плиты', 'плит'),
+                            ('перекрытие', 'перекрыт'),
+                            ('перекрытия', 'перекрыт'),
+                            ('лестница', 'лестниц'),
+                            ('лестницы', 'лестниц'),
+                        ]
+                        
+                        for base_form, keyword in morphological_pairs:
+                            if keyword in work_subdivision_lower and base_form in element_name_lower:
+                                match_found = True
+                                break
+                            if base_form in work_subdivision_lower and keyword in element_name_lower:
                                 match_found = True
                                 break
                     
