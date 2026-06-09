@@ -1,0 +1,64 @@
+{
+  "session_id": "44c62382-9ce9-4a00-82be-c7d797f028e1",
+  "status": "completed",
+  "pdf_files": [
+    "ВОР КР.pdf",
+    "Текстовая и графическая часть КР.pdf"
+  ],
+  "ifc_files": [
+    "ifc модель КР.ifc"
+  ],
+  "excel_files": [
+    "Спецификация по ifc КР.xlsx"
+  ],
+  "other_files": [],
+  "file_organization": {
+    "ifc_count": 1,
+    "excel_count": 1,
+    "pdf_count": 2
+  },
+  "pdf_classification": {
+    "categories": {
+      "volume_statement": 1,
+      "explanatory_note": 1
+    },
+    "files": {
+      "volume_statement": [
+        {
+          "filename": "ВОР КР.pdf",
+          "source_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/44c62382-9ce9-4a00-82be-c7d797f028e1/pdf_documents/ВОР КР.pdf",
+          "dest_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/44c62382-9ce9-4a00-82be-c7d797f028e1/volume_statement/ВОР КР.pdf",
+          "category": "volume_statement",
+          "pages_analyzed": 3,
+          "file_size": 999778
+        }
+      ],
+      "explanatory_note": [
+        {
+          "filename": "Текстовая и графическая часть КР.pdf",
+          "source_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/44c62382-9ce9-4a00-82be-c7d797f028e1/pdf_documents/Текстовая и графическая часть КР.pdf",
+          "dest_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/44c62382-9ce9-4a00-82be-c7d797f028e1/explanatory_note/Текстовая и графическая часть КР.pdf",
+          "category": "explanatory_note",
+          "pages_analyzed": 3,
+          "file_size": 10400384
+        }
+      ]
+    }
+  },
+  "drawings_count": 8,
+  "ifc_excel_file": null,
+  "elements_json_file": "elements.json",
+  "works_list_filtered": true,
+  "works_list_output_file": "Перечень работ КР_new.xlsx",
+  "mapping_completed": true,
+  "mapped_elements_works_file": "mapped_elements_works.xlsx",
+  "results_summary": {
+    "text_pages_count": 74,
+    "drawing_pages_count": 8,
+    "drawings_folder_count": 8,
+    "ifc_processed": true,
+    "pdf_classified": true,
+    "elements_json_saved": true,
+    "mapping_completed": true
+  }
+}
