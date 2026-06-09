@@ -1,0 +1,26 @@
+{
+  "text_pages": [],
+  "drawing_pages": [],
+  "ifc_results": {
+    "success": true,
+    "total_elements": 3268,
+    "height_m": 64.16,
+    "full_elements_file": "full_elements.xlsx",
+    "elements_json_file": "elements.json",
+    "height_file": "height.txt"
+  },
+  "pdf_classification": null,
+  "elements_json": null,
+  "elements_json_results": {
+    "success": true,
+    "source": "ifc_parser",
+    "output_file": "elements.json"
+  },
+  "height_filter": {
+    "success": true,
+    "output_file": "Перечень работ КР_new.xlsx",
+    "output_path": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/uploads/ea4e95f5-d4d1-46a0-be26-4cb8a8a37125/Перечень работ КР_new.xlsx",
+    "building_height": 64.16,
+    "source_file": "/home/kosinov.va/Projects/processing_schema/ifc_inspect/backend/../data/Перечень работ КР.xlsx"
+  }
+}
