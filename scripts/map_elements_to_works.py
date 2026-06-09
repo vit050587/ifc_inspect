@@ -2,24 +2,36 @@
 # -*- coding: utf-8 -*-
 """
 Скрипт для подбора видов работ к элементам из таблицы full_elements.xlsx
-на основе таблицы Перечень работ КР_new.xlsx (версия 4)
+на основе таблицы Перечень работ КР_new.xlsx
 
-Алгоритм v4 (СТРОГО ПО ПОРЯДКУ):
-1. Берется каждый элемент, определяется его уровень (подземный или наземный) по параметру 'Подземный/Надземный'
-2. В зависимости от уровня выбираются соответствующие подразделы видов работ (только подземные или только надземные)
-3. Берется класс элемента (IFC) и фильтруются виды работы только по этому классу
-4. Проверяются в каждом виде работ (ранее отобранных для элемента) параметры по размеру площади, объему или толщине.
-   Если они есть - определяются у элемента (по параметрам или из наименования). 
-   Отфильтровываются все виды работ, подходящие под условия. Остаются те где условий нет И те что подходят под условия.
-5. Проверяются параметры материала элемента и в тех строках вида работы находятся подходящие.
-   Оставляются только те что подходят к элементу и те что ранее были отобраны + те где условий по материалу нет.
+Алгоритм v5 (ИТОГОВЫЙ АЛГОРИТМ ПОДБОРА ВИДОВ РАБОТ):
 
-Ключевые особенности v4:
-- Строгое разделение работ по подземным/надземным разделам (шаг 1-2)
-- Фильтрация по IFC классу элемента (шаг 3)
-- Проверка параметров (размеры, площадь, объем) ДО проверки материала (шаг 4)
-- Проверка материала (класс бетона, морозостойкость, водонепроницаемость) ПОСЛЕ параметров (шаг 5)
-- Исключение элементов без работ (термовкладыши, отверстия, трубы)
+1. Определение уровня элемента:
+   - Извлечь позицию из полей: ExpCheck_Slab:MGE_Position, ExpCheck_Wall:MGE_Position, 
+     ExpCheck_Column:MGE_Position, ExpCheck_Beam:MGE_Position, ExpCheck_Ramp:MGE_Position
+   - Распарсить префикс и номер секции (например ФПм-1.1-1 → префикс=ФП, секция=1)
+   - Определить уровень:
+     ◦ ФП/УФП/ФО/БП/ПП+секция1 → underground
+     ◦ ПП/ПР/СТ/ПЛ/РП/П+секция≥2 → above
+     ◦ Для элементов без позиции: по категории (Фундамент_* → underground, остальное → above)
+
+2. Маппинг параметров:
+   • t ← thickness/Width (мм)
+   • S ← area_m2/NetSideArea (м²)
+   • V ← volume_m3/NetVolume (м³)
+   • Ф ← диаметр арматуры (мм)
+   • a ← width/сечение (мм)
+   • B30/F150/W6 ← concrete_class/frost_resistance/water_permeability
+   Примечание: H (Height) не используется в условиях параметризации, так как высота здания учитывается на предыдущем этапе.
+
+3. Порядок подбора работ:
+   1. Фильтр по уровню (underground/above)
+   2. Фильтр по IFC классу
+   3. Применение условий параметризации
+   4. Группировка: целые № п/п = работы, дробные = материалы
+   5. Для is_reinforced=True добавить армирование
+
+4. Пропускать: IfcBuildingElementProxy, IfcOpeningElement, элементы с volume=0 и area=0
 """
 
 import pandas as pd
@@ -191,19 +203,126 @@ def is_element_without_works(ifc_class: str, name: str) -> bool:
     return False
 
 
-def get_element_level(row: pd.Series) -> str:
-    """Определяет уровень элемента (подземный/надземный)"""
-    level = row.get('Подземный/Надземный', '')
-    if pd.isna(level):
-        return 'Не определено'
+def parse_position_to_level(position: str) -> Optional[str]:
+    """
+    Распарсить позицию элемента и определить уровень.
     
-    level_str = str(level).strip()
-    if 'подземн' in level_str.lower() or 'подз.' in level_str.lower():
-        return 'Подземный'
-    elif 'надземн' in level_str.lower() or 'надз.' in level_str.lower():
-        return 'Надземный'
+    Примеры позиций:
+    - ФПм-1.1-1 → префикс=ФП, секция=1 → underground
+    - УФП-1.2-3 → префикс=УФП, секция=1 → underground  
+    - ФО-1.1-2 → префикс=ФО, секция=1 → underground
+    - БП-1.1-1 → префикс=БП, секция=1 → underground
+    - ПП-1.1-5 → префикс=ПП, секция=1 → underground
+    - ПП-2.1-1 → префикс=ПП, секция=2 → above
+    - ПР-2.1-3 → префикс=ПР, секция=2 → above
+    - СТ-3.1-1 → префикс=СТ, секция=3 → above
+    - ПЛ-4.1-2 → префикс=ПЛ, секция=4 → above
+    - РП-5.1-1 → префикс=РП, секция=5 → above
+    - П-6.1-3 → префикс=П, секция=6 → above
+    
+    Возвращает: 'underground', 'above' или None
+    """
+    if pd.isna(position) or not position or not isinstance(position, str):
+        return None
+    
+    position = position.strip()
+    if not position:
+        return None
+    
+    # Извлекаем префикс (буквы до первого дефиса или цифры)
+    # Учитываем что после букв может быть строчная буква (например ФПм)
+    match = re.match(r'^([А-ЯA-Z]+[а-яa-z]?)([-–]|\s|\d)', position)
+    if not match:
+        return None
+    
+    prefix = match.group(1).upper()
+    
+    # Нормализуем префикс: убираем суффиксы типа "м" (ФПм -> ФП)
+    # Оставляем только основные буквы префикса
+    normalized_prefix = re.sub(r'[А-ЯA-Z]+$', '', prefix) or prefix
+    
+    # Извлекаем номер секции (первое число после префикса)
+    # Формат может быть: ФПм-1.1-1, ФП-1.1, ПП2-1.1 и т.д.
+    section_match = re.search(r'[-–]\s*(\d+)', position)
+    if not section_match:
+        # Пробуем найти число сразу после префикса (без дефиса)
+        section_match = re.search(r'[А-ЯA-Z]+[а-яa-z]?(\d+)', position)
+        if section_match:
+            section_num = int(section_match.group(1))
+        else:
+            return None
     else:
-        return level_str
+        section_num = int(section_match.group(1))
+    
+    # Определяем уровень по префиксу и номеру секции
+    underground_prefixes = ['ФП', 'УФП', 'ФО', 'БП']  # Фундаментная плита, Утепленная фундаментная плита, Фундаментные основания, Блочная плита
+    
+    # ПП с секцией 1 = подземный, с секцией >= 2 = надземный
+    if normalized_prefix == 'ПП':
+        if section_num == 1:
+            return 'underground'
+        else:
+            return 'above'
+    
+    # Префиксы для подземной части
+    if normalized_prefix in underground_prefixes:
+        return 'underground'
+    
+    # Префиксы для надземной части (секция >= 2 или любой этаж кроме 1)
+    above_prefixes = ['ПР', 'СТ', 'ПЛ', 'РП', 'П']  # Перекрытие кровли, Стены, Перекрытие лестничное, Рабочая поверхность, Плоский элемент
+    
+    if normalized_prefix in above_prefixes:
+        if section_num >= 2:
+            return 'above'
+        elif section_num == 1 and prefix != 'ПП':
+            # Для не-ПП префиксов секция 1 может быть подземной
+            return 'underground'
+    
+    return None
+
+
+def get_element_level(row: pd.Series) -> str:
+    """
+    Определяет уровень элемента (underground/above).
+    
+    Алгоритм:
+    1. Извлечь позицию из полей: ExpCheck_Slab:MGE_Position, ExpCheck_Wall:MGE_Position, 
+       ExpCheck_Column:MGE_Position, ExpCheck_Beam:MGE_Position, ExpCheck_Ramp:MGE_Position
+    2. Распарсить префикс и номер секции
+    3. Определить уровень по позиции
+    4. Если позиции нет: по категории (Фундамент_* → underground, остальное → above)
+    """
+    # Шаг 1: Пытаемся извлечь позицию из различных полей
+    position = None
+    position_fields = [
+        'ExpCheck_Slab:MGE_Position',
+        'ExpCheck_Wall:MGE_Position', 
+        'ExpCheck_Column:MGE_Position',
+        'ExpCheck_Beam:MGE_Position',
+        'ExpCheck_Ramp:MGE_Position'
+    ]
+    
+    for field in position_fields:
+        if field in row and pd.notna(row[field]):
+            position = str(row[field]).strip()
+            if position:
+                break
+    
+    # Шаг 2: Пытаемся определить уровень по позиции
+    if position:
+        level_from_position = parse_position_to_level(position)
+        if level_from_position:
+            return level_from_position
+    
+    # Шаг 3: Если позиции нет или не удалось определить уровень, используем категорию
+    category = row.get('Категория', '')
+    if pd.notna(category):
+        category_str = str(category).strip()
+        if category_str.startswith('Фундамент_') or 'фундамент' in category_str.lower():
+            return 'underground'
+    
+    # По умолчанию считаем элемент надземным
+    return 'above'
 
 
 def check_thickness_condition(element_thickness_m: float, condition: str) -> bool:
@@ -382,37 +501,6 @@ def check_perimeter_condition(width: float, height: float, condition: str) -> bo
     return False
 
 
-def check_height_condition(element_height: float, condition: str) -> bool:
-    """Проверяет условие по высоте (H в м)"""
-    if pd.isna(element_height) or element_height <= 0:
-        return False
-    
-    try:
-        # H<XXX м
-        match = re.search(r'H\s*<\s*(\d+)\s*м', condition)
-        if match:
-            limit = float(match.group(1))
-            return element_height < limit
-        
-        # H>XXX м
-        match = re.search(r'H\s*>\s*(\d+)\s*м', condition)
-        if match:
-            limit = float(match.group(1))
-            return element_height > limit
-        
-        # XXX<H<YYY м
-        match = re.search(r'(\d+)\s*<\s*H\s*<\s*(\d+)\s*м', condition)
-        if match:
-            lower = float(match.group(1))
-            upper = float(match.group(2))
-            return lower < element_height < upper
-        
-    except (AttributeError, ValueError):
-        pass
-    
-    return False
-
-
 def check_rebar_diameter_condition(condition: str, diameter: Optional[float] = None) -> bool:
     """Проверяет условие по диаметру арматуры (Ф в мм)"""
     try:
@@ -477,9 +565,43 @@ def check_concrete_condition(element_grade: str, element_freeze: str, element_wa
 
 
 def get_element_parameters(row: pd.Series) -> Dict:
-    """Извлекает параметры элемента из строки таблицы"""
+    """Извлекает параметры элемента из строки таблицы
+    
+    Маппинг параметров согласно алгоритму v5:
+    • t ← thickness/Width (мм)
+    • S ← area_m2/NetSideArea (м²)
+    • V ← volume_m3/NetVolume (м³)
+    • Ф ← диаметр арматуры (мм)
+    • a ← width/сечение (мм)
+    • B30/F150/W6 ← concrete_class/frost_resistance/water_permeability
+    Примечание: H (Height) не используется в условиях параметризации, так как высота здания учитывается на предыдущем этапе.
+    """
     material = row.get('Материал', '')
     characteristics = row.get('Характеристики материала', '')
+    
+    # Получаем основные параметры
+    thickness_m = row.get('Толщина, м', float('nan'))
+    width_m = row.get('Ширина, м', float('nan'))
+    height_m = row.get('Высота, м', float('nan'))
+    length_m = row.get('Длина, м', float('nan'))
+    volume_m3 = row.get('Объем, м³', float('nan'))
+    area_m2 = row.get('Площадь, м²', float('nan'))
+    
+    # Дополнительные поля для маппинга S и V
+    net_side_area = row.get('NetSideArea', float('nan'))
+    net_volume = row.get('NetVolume', float('nan'))
+    
+    # Применяем маппинг для S (area_m2 или NetSideArea)
+    if pd.isna(area_m2) and pd.notna(net_side_area):
+        area_m2 = net_side_area
+    
+    # Применяем маппинг для V (volume_m3 или NetVolume)
+    if pd.isna(volume_m3) and pd.notna(net_volume):
+        volume_m3 = net_volume
+    
+    # Для толщины используем Width если Thickness не указан
+    if pd.isna(thickness_m) and pd.notna(width_m):
+        thickness_m = width_m
     
     params = {
         'ifc_class': determine_ifc_class(row),
@@ -489,12 +611,13 @@ def get_element_parameters(row: pd.Series) -> Dict:
         'freeze_durability': parse_freeze_durability(material, characteristics),
         'water_resist': parse_water_resist(material, characteristics),
         'aggregate_type': parse_aggregate_type(material, characteristics),
-        'thickness_m': row.get('Толщина, м', float('nan')),
-        'width_m': row.get('Ширина, м', float('nan')),
-        'height_m': row.get('Высота, м', float('nan')),
-        'length_m': row.get('Длина, м', float('nan')),
-        'volume_m3': row.get('Объем, м³', float('nan')),
-        'area_m2': row.get('Площадь, м²', float('nan')),
+        'thickness_m': thickness_m,
+        'width_m': width_m,
+        'height_m': height_m,
+        'length_m': length_m,
+        'volume_m3': volume_m3,
+        'area_m2': area_m2,
+        'is_reinforced': row.get('is_reinforced', False),  # Флаг армирования
     }
     
     # Вычисляем площадь сечения для колонн и балок
@@ -621,11 +744,6 @@ def match_work_to_element(element_params: Dict, work_row: pd.Series) -> bool:
                 ):
                     return False
             
-            # Проверяем условия по высоте (H)
-            if re.search(r'\bh\b', param_line.lower()) and ('<' in param_line or '>' in param_line):
-                if not check_height_condition(element_params['height_m'], param_line):
-                    return False
-            
             # Проверяем условия по диаметру арматуры (Ф)
             if 'ф' in param_line.lower() or 'ф=' in param_line:
                 if not check_rebar_diameter_condition(param_line):
@@ -697,59 +815,60 @@ def find_works_for_element(element_row: pd.Series, works_df: pd.DataFrame,
                            works_underground: Dict, works_aboveground: Dict, 
                            works_universal: pd.DataFrame) -> List[Dict]:
     """
-    Находит все подходящие виды работ для элемента с учетом уровня (подземный/надземный)
+    Находит все подходящие виды работ для элемента с учетом уровня (underground/above)
     
-    Алгоритм:
-    1. Определяем уровень элемента (подземный/надземный)
-    2. Выбираем работы ТОЛЬКО из соответствующего раздела (подземные/надземные)
-    3. Проверяем IFC класс, параметры и материал
-    4. Добавляем универсальные работы ТОЛЬКО если для данного IFC класса нет работ в соответствующем разделе
+    Алгоритм v5 (строго по порядку):
+    1. Фильтр по уровню (underground/above)
+    2. Фильтр по IFC классу
+    3. Применение условий параметризации
+    4. Группировка: целые № п/п = работы, дробные = материалы
+    5. Для is_reinforced=True добавить армирование
     
-    Ключевое правило:
-    - Если элемент определенного IFC класса и в таблице есть подраздел с этим классом,
-      то смотреть работы нужно ТОЛЬКО в этом подразделе таблицы для этого элемента.
+    Пропускать: IfcBuildingElementProxy, IfcOpeningElement, элементы с volume=0 и area=0
     """
     
     element_params = get_element_parameters(element_row)
     
-    # Если элемент без работ, сразу возвращаем пустой список
+    # Пропускаем элементы без работ
     if element_params['no_works']:
+        return []
+    
+    # Пропускаем элементы с volume=0 и area=0
+    volume = element_params.get('volume_m3', float('nan'))
+    area = element_params.get('area_m2', float('nan'))
+    if (pd.notna(volume) and volume == 0) or (pd.notna(area) and area == 0):
         return []
     
     matched_works = []
     element_ifc = element_params['ifc_class'].lower()
-    element_level = element_params['level']
+    element_level = element_params['level']  # 'underground' или 'above'
     
     # Собираем подходящие работы в зависимости от уровня элемента
     candidate_works = []
     has_specific_works = False  # Флаг: есть ли специфичные работы для этого IFC класса в нужном разделе
     
-    # Выбираем работы из соответствующего раздела
-    # ВАЖНО: Если уровень элемента НЕ определен, то НЕ берем специфичные работы по IFC классу
-    # а используем только универсальные работы. Это предотвращает попадание лишних работ.
-    if element_level == 'Подземный':
+    # Шаг 1: Фильтр по уровню (underground/above)
+    if element_level == 'underground':
         # Для подземных элементов берем работы из подземного раздела
         if element_ifc in works_underground:
             for _, work_row in works_underground[element_ifc].iterrows():
                 candidate_works.append(work_row)
                 has_specific_works = True
-    elif element_level == 'Надземный':
+    elif element_level == 'above':
         # Для надземных элементов берем работы из надземного раздела
         if element_ifc in works_aboveground:
             for _, work_row in works_aboveground[element_ifc].iterrows():
                 candidate_works.append(work_row)
                 has_specific_works = True
-    # Если уровень не определен - НЕ берем специфичные работы по IFC классу
-    # has_specific_works остается False и будут использованы только универсальные работы
     
     # Добавляем универсальные работы ТОЛЬКО если нет специфичных работ для этого IFC класса
-    # или если уровень элемента не определен
     if not has_specific_works and works_universal is not None and len(works_universal) > 0:
         for _, work_row in works_universal.iterrows():
             candidate_works.append(work_row)
     
     # Проверяем каждую кандидатуру
     for work_row in candidate_works:
+        # Шаг 2-3: Проверка IFC класса и параметров выполняется в match_work_to_element
         if match_work_to_element(element_params, work_row):
             matched_works.append({
                 'work_idx': work_row.name,
@@ -761,7 +880,61 @@ def find_works_for_element(element_row: pd.Series, works_df: pd.DataFrame,
                 'parametrization': work_row.get('Параметризация', ''),
             })
     
+    # Шаг 5: Для is_reinforced=True добавить армирование
+    if element_params.get('is_reinforced', False):
+        # Ищем работы по армированию в соответствующем разделе
+        rebar_works = get_reinforcement_works(element_params, works_underground, works_aboveground, works_universal, element_level)
+        matched_works.extend(rebar_works)
+    
     return matched_works
+
+
+def get_reinforcement_works(element_params: Dict, works_underground: Dict, works_aboveground: Dict, 
+                            works_universal: pd.DataFrame, element_level: str) -> List[Dict]:
+    """
+    Получает работы по армированию для элемента с is_reinforced=True
+    
+    Возвращает список работ по армированию
+    """
+    reinforcement_works = []
+    
+    # Ищем работы с ключевыми словами "армирован", "арматура", "сетк"
+    candidate_works = []
+    
+    if element_level == 'underground':
+        for ifc_class, df in works_underground.items():
+            for _, work_row in df.iterrows():
+                work_name = str(work_row.get('Наименование работ', '')).lower()
+                if any(kw in work_name for kw in ['армирован', 'арматура', 'сетк', 'каркас']):
+                    candidate_works.append(work_row)
+    elif element_level == 'above':
+        for ifc_class, df in works_aboveground.items():
+            for _, work_row in df.iterrows():
+                work_name = str(work_row.get('Наименование работ', '')).lower()
+                if any(kw in work_name for kw in ['армирован', 'арматура', 'сетк', 'каркас']):
+                    candidate_works.append(work_row)
+    
+    # Также проверяем универсальные работы
+    if works_universal is not None:
+        for _, work_row in works_universal.iterrows():
+            work_name = str(work_row.get('Наименование работ', '')).lower()
+            if any(kw in work_name for kw in ['армирован', 'арматура', 'сетк', 'каркас']):
+                candidate_works.append(work_row)
+    
+    # Фильтруем работы по соответствию элементу
+    for work_row in candidate_works:
+        if match_work_to_element(element_params, work_row):
+            reinforcement_works.append({
+                'work_idx': work_row.name,
+                'work_name': work_row.get('Наименование работ', ''),
+                'unit': work_row.get('Ед. изм', ''),
+                'tsn_code': work_row.get('Шифр ТСН', ''),
+                'description': work_row.get('Наименование расценки/ресурса', ''),
+                'formula': work_row.get('Формула расчёта объёмов работ и расхода материалов', ''),
+                'parametrization': work_row.get('Параметризация', ''),
+            })
+    
+    return reinforcement_works
 
 
 def load_and_prepare_works(works_file: str) -> Tuple[pd.DataFrame, Dict, Dict, pd.DataFrame]:
