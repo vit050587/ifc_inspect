@@ -4,34 +4,33 @@
 Скрипт для подбора видов работ к элементам из таблицы full_elements.xlsx
 на основе таблицы Перечень работ КР_new.xlsx
 
-Алгоритм v5 (ИТОГОВЫЙ АЛГОРИТМ ПОДБОРА ВИДОВ РАБОТ):
+Алгоритм v6 (ПОШАГОВЫЙ АЛГОРИТМ ПОДБОРА ВИДОВ РАБОТ):
 
-1. Определение уровня элемента:
-   - Извлечь позицию из полей: ExpCheck_Slab:MGE_Position, ExpCheck_Wall:MGE_Position, 
-     ExpCheck_Column:MGE_Position, ExpCheck_Beam:MGE_Position, ExpCheck_Ramp:MGE_Position
-   - Распарсить префикс и номер секции (например ФПм-1.1-1 → префикс=ФП, секция=1)
-   - Определить уровень:
-     ◦ ФП/УФП/ФО/БП/ПП+секция1 → underground
-     ◦ ПП/ПР/СТ/ПЛ/РП/П+секция≥2 → above
-     ◦ Для элементов без позиции: по категории (Фундамент_* → underground, остальное → above)
+1. Берем элемент из таблицы элементов
+2. Смотрим категорию уровня элемента в колонке "Категория уровня" таблицы full_elements.xlsx
+3. Ищем в справочнике работ (Перечень работ КР_new.xlsx) в колонке "Категория уровня" наше значение (наличие текста)
+4. Отбираем все виды работ и материалы соответствующие значениям уровня
 
-2. Маппинг параметров:
-   • t ← thickness/Width (мм)
-   • S ← area_m2/NetSideArea (м²)
-   • V ← volume_m3/NetVolume (м³)
-   • Ф ← диаметр арматуры (мм)
-   • a ← width/сечение (мм)
-   • B30/F150/W6 ← concrete_class/frost_resistance/water_permeability
-   Примечание: H (Height) не используется в условиях параметризации, так как высота здания учитывается на предыдущем этапе.
+Далее:
+5. Смотрим на класс элемента в колонке "Ifc Class" таблицы элементов и сопоставляем с колонкой «IFC класс подраздела» в таблице справочника работ
+6. Отбираем из уже ранее отобранных видов работ те что соответствуют еще и по классу
 
-3. Порядок подбора работ:
-   1. Фильтр по уровню (underground/above)
-   2. Фильтр по IFC классу
-   3. Применение условий параметризации
-   4. Группировка: целые № п/п = работы, дробные = материалы
-   5. Для is_reinforced=True добавить армирование
+Далее:
+7. Смотрим на имя в колонке Element Specific:Name таблицы элементов и семантически пытаемся сопоставить со значением колонки «Подраздел» из справочника работ 
+   из тех которые уже были отобраны ранее двумя этапами (по уровню и классу) и оставляем те виды работ и материалов которые соответствуют
 
-4. Пропускать: IfcBuildingElementProxy, IfcOpeningElement, элементы с volume=0 и area=0
+Далее:
+8. Смотрим на отобранные виды работы по нашему выбранному элементу и если там в колонке «№ п/п» есть работы с одинаковым числом (целым), 
+   то необходимо выбрать одно исходя из параметров в колонке «Параметризация» - смотрим условия как они считаются в колонке 
+   «Формула расчёта объёмов работ и расхода материалов» и единицы измерения в колонке «Ед. изм» в которых нужно высчитывать 
+   в справочнике и пробуем посчитать требуемые размерности у нашего выбранного элемента, после чего оставляем наиболее соответствующий вид работы.
+
+Далее:
+9. Смотрим на «№ п/п» с нецелочисленным значением (это означает материал для вида работы) если таковой имеется, 
+   то смотрим на колонку «Наименование работ (целые числа) материалы для этих работ (дробные числа)» в справочнике 
+   и смотреть на материал изготовления нашего элемента и считать его объем в той единице измерения в которой указано в колонке «Ед. изм»
+
+Записывать списки работ по данному элементу в новый файл и брать следующий элемент чтобы так же пройти на соответствие
 """
 
 import pandas as pd
@@ -283,16 +282,22 @@ def parse_position_to_level(position: str) -> Optional[str]:
 
 def get_element_level(row: pd.Series) -> str:
     """
-    Определяет уровень элемента (underground/above).
+    Определяет уровень элемента по колонке "Категория уровня" из таблицы элементов.
     
-    Алгоритм:
-    1. Извлечь позицию из полей: ExpCheck_Slab:MGE_Position, ExpCheck_Wall:MGE_Position, 
-       ExpCheck_Column:MGE_Position, ExpCheck_Beam:MGE_Position, ExpCheck_Ramp:MGE_Position
-    2. Распарсить префикс и номер секции
-    3. Определить уровень по позиции
-    4. Если позиции нет: по категории (Фундамент_* → underground, остальное → above)
+    Алгоритм v6:
+    1. Смотрим категорию уровня элемента в колонке "Категория уровня" таблицы full_elements.xlsx
+    2. Сопоставляем с категорией уровня в справочнике работ
+    
+    Возвращает значение категории уровня или 'above' по умолчанию
     """
-    # Шаг 1: Пытаемся извлечь позицию из различных полей
+    # Шаг 1: Пытаемся получить категорию уровня напрямую из колонки "Категория уровня"
+    category_level = row.get('Категория уровня', '')
+    if pd.notna(category_level):
+        category_str = str(category_level).strip()
+        if category_str:
+            return category_str
+    
+    # Шаг 2: Если нет колонки "Категория уровня", пробуем определить по позиции
     position = None
     position_fields = [
         'ExpCheck_Slab:MGE_Position',
@@ -308,13 +313,13 @@ def get_element_level(row: pd.Series) -> str:
             if position:
                 break
     
-    # Шаг 2: Пытаемся определить уровень по позиции
+    # Шаг 3: Пытаемся определить уровень по позиции
     if position:
         level_from_position = parse_position_to_level(position)
         if level_from_position:
             return level_from_position
     
-    # Шаг 3: Если позиции нет или не удалось определить уровень, используем категорию
+    # Шаг 4: Если позиции нет, используем категорию
     category = row.get('Категория', '')
     if pd.notna(category):
         category_str = str(category).strip()
@@ -812,17 +817,19 @@ def match_work_to_element(element_params: Dict, work_row: pd.Series) -> bool:
 
 
 def find_works_for_element(element_row: pd.Series, works_df: pd.DataFrame, 
-                           works_underground: Dict, works_aboveground: Dict, 
-                           works_universal: pd.DataFrame) -> List[Dict]:
+                           works_by_level: Dict, works_universal: pd.DataFrame) -> List[Dict]:
     """
-    Находит все подходящие виды работ для элемента с учетом уровня (underground/above)
+    Находит все подходящие виды работ для элемента по алгоритму v6
     
-    Алгоритм v5 (строго по порядку):
-    1. Фильтр по уровню (underground/above)
-    2. Фильтр по IFC классу
-    3. Применение условий параметризации
-    4. Группировка: целые № п/п = работы, дробные = материалы
-    5. Для is_reinforced=True добавить армирование
+    Алгоритм v6 (строго по порядку):
+    1. Смотрим категорию уровня элемента в колонке "Категория уровня" таблицы элементов
+    2. Ищем в справочнике работ в колонке "Категория уровня" наше значение (наличие текста)
+    3. Отбираем все виды работ и материалы соответствующие значениям уровня
+    4. Смотрим на класс элемента в колонке "Ifc Class" и сопоставляем с колонкой «IFC класс подраздела»
+    5. Отбираем из уже ранее отобранных видов работ те что соответствуют еще и по классу
+    6. Смотрим на имя элемента и семантически сопоставляем со значением колонки «Подраздел»
+    7. Если есть работы с одинаковым целым № п/п, выбираем одну по параметрам параметризации
+    8. Для дробных № п/п (материалы) смотрим материал элемента и считаем объем
     
     Пропускать: IfcBuildingElementProxy, IfcOpeningElement, элементы с volume=0 и area=0
     """
@@ -840,35 +847,93 @@ def find_works_for_element(element_row: pd.Series, works_df: pd.DataFrame,
         return []
     
     matched_works = []
-    element_ifc = element_params['ifc_class'].lower()
-    element_level = element_params['level']  # 'underground' или 'above'
+    element_ifc = element_params['ifc_class']
+    element_level = element_params['level']  # категория уровня из таблицы элементов
+    element_name = element_params['name']
+    element_subdivision = element_params.get('subdivision', '')  # Подраздел элемента если есть
     
-    # Собираем подходящие работы в зависимости от уровня элемента
+    # Шаг 1-3: Фильтр по категории уровня
+    # Ищем в справочнике работ в колонке "Категория уровня" наше значение (наличие текста)
     candidate_works = []
-    has_specific_works = False  # Флаг: есть ли специфичные работы для этого IFC класса в нужном разделе
     
-    # Шаг 1: Фильтр по уровню (underground/above)
-    if element_level == 'underground':
-        # Для подземных элементов берем работы из подземного раздела
-        if element_ifc in works_underground:
-            for _, work_row in works_underground[element_ifc].iterrows():
-                candidate_works.append(work_row)
-                has_specific_works = True
-    elif element_level == 'above':
-        # Для надземных элементов берем работы из надземного раздела
-        if element_ifc in works_aboveground:
-            for _, work_row in works_aboveground[element_ifc].iterrows():
-                candidate_works.append(work_row)
-                has_specific_works = True
+    # Проверяем точное совпадение категории уровня
+    if element_level in works_by_level:
+        for _, work_row in works_by_level[element_level].iterrows():
+            candidate_works.append(work_row)
     
-    # Добавляем универсальные работы ТОЛЬКО если нет специфичных работ для этого IFC класса
-    if not has_specific_works and works_universal is not None and len(works_universal) > 0:
+    # Если не нашли точного совпадения, пробуем найти частичное совпадение (наличие текста)
+    if not candidate_works:
+        for level_key, level_works in works_by_level.items():
+            if element_level in level_key or level_key in element_level:
+                for _, work_row in level_works.iterrows():
+                    candidate_works.append(work_row)
+                break
+    
+    # Если все еще нет кандидатов, пробуем универсальные работы
+    if not candidate_works and works_universal is not None and len(works_universal) > 0:
         for _, work_row in works_universal.iterrows():
             candidate_works.append(work_row)
     
-    # Проверяем каждую кандидатуру
+    # Шаг 4: Фильтр по IFC классу подраздела
+    # Сопоставляем значение с колонкой «IFC класс подраздела» в таблице справочника работ
+    if candidate_works and element_ifc:
+        filtered_by_ifc = []
+        element_ifc_lower = element_ifc.lower()
+        
+        for work_row in candidate_works:
+            work_ifc_subclass = str(work_row.get('IFC класс подраздела', ''))
+            if work_ifc_subclass:
+                # Проверяем наличие IFC класса элемента в IFC классе подраздела работы
+                work_ifcs = [x.strip().lower() for x in work_ifc_subclass.replace('\\n', ',').split(',')]
+                if any(element_ifc_lower in wifc or wifc in element_ifc_lower for wifc in work_ifcs if wifc):
+                    filtered_by_ifc.append(work_row)
+        
+        candidate_works = filtered_by_ifc
+    
+    # Шаг 5: Семантическое сопоставление по Подразделу
+    # Смотрим на имя элемента и сопоставляем со значением колонки «Подраздел» из справочника работ
+    if candidate_works and element_name:
+        filtered_by_subdivision = []
+        element_name_lower = element_name.lower()
+        
+        for work_row in candidate_works:
+            work_subdivision = str(work_row.get('Подраздел', ''))
+            if work_subdivision:
+                # Семантическое сопоставление: проверяем наличие ключевых слов
+                # Пример: "Фундаментная плита" в названии элемента → ищем "Фундаментная плита" в подразделе
+                if work_subdivision.lower() in element_name_lower or element_name_lower in work_subdivision.lower():
+                    filtered_by_subdivision.append(work_row)
+                else:
+                    # Проверяем по ключевым словам
+                    subdivision_keywords = {
+                        'фундаментн': ['фундамент', 'плита', 'фп'],
+                        'стен': ['стена', 'стен', 'монолит'],
+                        'колонн': ['колонн', 'кол'],
+                        'балк': ['балк', 'ригел'],
+                        'перекрыт': ['перекрыт', 'плит', 'покрыт'],
+                        'лестниц': ['лестниц', 'марш', 'площадк'],
+                        'приям': ['приям', 'приямок'],
+                    }
+                    
+                    match_found = False
+                    for subdiv_key, keywords in subdivision_keywords.items():
+                        if subdiv_key in work_subdivision.lower():
+                            if any(kw in element_name_lower for kw in keywords):
+                                match_found = True
+                                break
+                    
+                    if match_found:
+                        filtered_by_subdivision.append(work_row)
+                    else:
+                        # Если не нашли совпадения по подразделу, оставляем работу если нет строгого фильтра
+                        filtered_by_subdivision.append(work_row)
+            else:
+                filtered_by_subdivision.append(work_row)
+        
+        candidate_works = filtered_by_subdivision
+    
+    # Шаг 6-7: Проверка параметризации и выбор работ
     for work_row in candidate_works:
-        # Шаг 2-3: Проверка IFC класса и параметров выполняется в match_work_to_element
         if match_work_to_element(element_params, work_row):
             matched_works.append({
                 'work_idx': work_row.name,
@@ -878,13 +943,8 @@ def find_works_for_element(element_row: pd.Series, works_df: pd.DataFrame,
                 'description': work_row.get('Наименование расценки/ресурса', ''),
                 'formula': work_row.get('Формула расчёта объёмов работ и расхода материалов', ''),
                 'parametrization': work_row.get('Параметризация', ''),
+                'pp_number': work_row.get('№ п/п', None),
             })
-    
-    # Шаг 5: Для is_reinforced=True добавить армирование
-    if element_params.get('is_reinforced', False):
-        # Ищем работы по армированию в соответствующем разделе
-        rebar_works = get_reinforcement_works(element_params, works_underground, works_aboveground, works_universal, element_level)
-        matched_works.extend(rebar_works)
     
     return matched_works
 
@@ -937,14 +997,18 @@ def get_reinforcement_works(element_params: Dict, works_underground: Dict, works
     return reinforcement_works
 
 
-def load_and_prepare_works(works_file: str) -> Tuple[pd.DataFrame, Dict, Dict, pd.DataFrame]:
+def load_and_prepare_works(works_file: str) -> Tuple[pd.DataFrame, Dict, pd.DataFrame]:
     """
-    Загружает и подготавливает таблицу работ с разделением на подземные/надземные
+    Загружает и подготавливает таблицу работ с группировкой по Категория уровня
+    
+    Алгоритм v6:
+    1. Загружаем справочник работ (Перечень работ КР_new.xlsx)
+    2. Группируем работы по колонке "Категория уровня" для быстрого поиска
+    3. Также группируем по IFC классу подраздела внутри каждой категории уровня
     
     Возвращает:
     - df_works_valid: все валидные работы
-    - works_underground: работы для подземной части (словарь по IFC классам)
-    - works_aboveground: работы для надземной части (словарь по IFC классам)
+    - works_by_level: словарь работ по категориям уровня (ключ = категория уровня, значение = DataFrame)
     - works_universal: универсальные работы (без привязки к уровню)
     """
     print(f"Загрузка таблицы работ из {works_file}...")
@@ -965,70 +1029,32 @@ def load_and_prepare_works(works_file: str) -> Tuple[pd.DataFrame, Dict, Dict, p
     df_works_valid = df_works[valid_works_mask].copy()
     print(f"Валидных видов работ: {len(df_works_valid)}")
     
-    # Определяем текущий раздел для каждой строки
-    # Разделы определяются по строкам в колонке "Категория уровня" содержащим "Подземная часть здания" или "Надземная часть здания"
-    # Важно: ищем именно заголовки высокого уровня, а не подразделы
+    # Группируем работы по Категория уровня для ускорения поиска
+    # Алгоритм v6: смотрим на справочник работ и в колонке категория уровня ищем наше значение (наличие текста)
+    works_by_level = {}  # словарь: ключ = категория уровня, значение = DataFrame с работами
     
-    current_section = None  # 'underground', 'aboveground', 'other'
-    section_column = []
+    # Получаем уникальные категории уровня
+    unique_levels = df_works_valid['Категория уровня'].dropna().unique()
     
-    for idx, row in df_works.iterrows():
-        # Используем колонку "Категория уровня" вместо "Наименование работ"
-        category = str(row.get('Категория уровня', '')) if pd.notna(row.get('Категория уровня', '')) else ''
-        
-        # Проверяем является ли строка заголовком основного раздела
-        # Ищем именно главные разделы, а не подразделы
-        if 'Подземная часть здания' in category and 'Подраздел' not in category:
-            current_section = 'underground'
-        elif 'Надземная часть здания' in category and 'Подраздел' not in category:
-            current_section = 'aboveground'
-        # Подразделы наследуют текущий раздел
-        
-        section_column.append(current_section)
+    for level in unique_levels:
+        if pd.notna(level) and level not in ['не моделируется', 'чаще всего не моделируется', '-', '']:
+            level_str = str(level).strip()
+            if level_str:
+                # Фильтруем работы по категории уровня
+                mask = df_works_valid['Категория уровня'] == level
+                if mask.any():
+                    works_by_level[level_str] = df_works_valid[mask].copy()
     
-    df_works_valid['_section'] = section_column[:len(df_works_valid)]
-    
-    # Группируем работы по IFC классам для ускорения поиска с разделением на подземные/надземные
-    works_underground = {}  # работы для подземной части
-    works_aboveground = {}  # работы для надземной части
-    
-    # Получаем уникальные IFC классы
-    unique_ifcs = df_works_valid['IFC класс'].dropna().unique()
-    
-    for ifc_class in unique_ifcs:
-        if pd.notna(ifc_class) and ifc_class not in ['не моделируется', 'чаще всего не моделируется', '-', '']:
-            # Нормализуем IFC класс (приводим к нижнему регистру)
-            ifc_lower = str(ifc_class).lower()
-            
-            # Разбиваем на отдельные классы если их несколько
-            ifc_parts = [x.strip() for x in ifc_lower.split('\n')]
-            
-            for ifc_part in ifc_parts:
-                if ifc_part and ifc_part not in ['не моделируется', 'чаще всего не моделируется', '-', '']:
-                    # Фильтруем работы по IFC классу и разделяем по секциям
-                    mask = df_works_valid['IFC класс'].str.contains(ifc_class, na=False)
-                    
-                    # Подземные работы
-                    underground_mask = mask & (df_works_valid['_section'] == 'underground')
-                    if underground_mask.any():
-                        if ifc_part not in works_underground:
-                            works_underground[ifc_part] = df_works_valid[underground_mask].copy()
-                    
-                    # Надземные работы
-                    aboveground_mask = mask & (df_works_valid['_section'] == 'aboveground')
-                    if aboveground_mask.any():
-                        if ifc_part not in works_aboveground:
-                            works_aboveground[ifc_part] = df_works_valid[aboveground_mask].copy()
-    
-    # Работы без привязки к IFC классу (универсальные) - они применяются ко всем уровням
-    universal_mask = df_works_valid['IFC класс'].isin(['не моделируется', 'чаще всего не моделируется', '-', '']) | df_works_valid['IFC класс'].isna()
+    # Работы без привязки к категории уровня (универсальные)
+    universal_mask = df_works_valid['Категория уровня'].isin(['не моделируется', 'чаще всего не моделируется', '-', '']) | df_works_valid['Категория уровня'].isna()
     works_universal = df_works_valid[universal_mask].copy()
     
-    print(f"Подземных работ (по IFC): {sum(len(v) for v in works_underground.values())}")
-    print(f"Надземных работ (по IFC): {sum(len(v) for v in works_aboveground.values())}")
+    print(f"Категорий уровня с работами: {len(works_by_level)}")
+    for level, works in works_by_level.items():
+        print(f"  - {level}: {len(works)} работ")
     print(f"Универсальных работ: {len(works_universal)}")
     
-    return df_works_valid, works_underground, works_aboveground, works_universal
+    return df_works_valid, works_by_level, works_universal
 
 
 def map_elements_to_works(session_folder=None):
@@ -1071,7 +1097,7 @@ def main(session_folder=None):
         return {'success': False, 'error': error_msg}
     
     print("=" * 60)
-    print("Подбор видов работ к элементам (версия 3)")
+    print("Подбор видов работ к элементам (версия 6)")
     print("=" * 60)
     
     # Загружаем элементы
@@ -1079,8 +1105,8 @@ def main(session_folder=None):
     df_elements = pd.read_excel(elements_file)
     print(f"Элементы: {len(df_elements)} строк")
     
-    # Загружаем и подготавливаем работы с разделением на подземные/надземные
-    df_works_valid, works_underground, works_aboveground, works_universal = load_and_prepare_works(works_file)
+    # Загружаем и подготавливаем работы с группировкой по Категория уровня
+    df_works_valid, works_by_level, works_universal = load_and_prepare_works(works_file)
     
     # Оптимизация: предварительно фильтруем элементы без работ
     print("\nПредварительная фильтрация элементов...")
@@ -1098,7 +1124,7 @@ def main(session_folder=None):
     elements_with_works = set()
     elements_without_works = set()
     
-    print("\nПодбор видов работ для элементов...")
+    print("\nПодбор видов работ для элементов (по алгоритму v6)...")
     total = len(valid_element_indices)
     for batch_idx, idx in enumerate(valid_element_indices):
         if batch_idx % 200 == 0:
@@ -1107,9 +1133,9 @@ def main(session_folder=None):
         element_row = df_elements.iloc[idx]
         element_params = get_element_parameters(element_row)
         
-        # Находим подходящие работы с учетом уровня элемента
+        # Находим подходящие работы по алгоритму v6
         matched_works = find_works_for_element(
-            element_row, df_works_valid, works_underground, works_aboveground, works_universal
+            element_row, df_works_valid, works_by_level, works_universal
         )
         
         if matched_works:
