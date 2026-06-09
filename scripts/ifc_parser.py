@@ -179,6 +179,51 @@ def classify_element(element, name, psets=None):
     return element_type
 
 
+def parse_section_number(name):
+    """
+    Парсинг префикса и номера секции из имени элемента.
+    Например: ФПм-1.1-1 → префикс=ФП, секция=1
+    Вторая цифра в номере секции указывает на номер этажа.
+    
+    Возвращает кортеж: (prefix, section_number, floor_number)
+    """
+    if not name:
+        return None, None, None
+    
+    # Ищем паттерн типа "-X.Y-Z" где X.Y - номер секции
+    # Примеры: ФПм-1.1-1, ФПм-2.1-1, ФПм-3.1-1
+    match = re.search(r'-([0-9]+)\.([0-9]+)', name)
+    if match:
+        # Извлекаем префикс - только заглавные буквы (кириллица и латиница)
+        prefix_match = re.match(r'^([A-ZА-Я]+)', name)
+        prefix = prefix_match.group(1) if prefix_match else None
+        
+        section_major = int(match.group(1))  # Первая цифра (номер секции)
+        floor_number = int(match.group(2))   # Вторая цифра (номер этажа)
+        
+        return prefix, section_major, floor_number
+    
+    return None, None, None
+
+
+def get_level_category(floor_number):
+    """
+    Определение категории уровня на основе номера этажа.
+    
+    Если вторая цифра в номере секции = 1 → до отм. 0,000
+    Если вторая цифра >= 2 → выше отм. 0,000
+    """
+    if floor_number is None:
+        return None
+    
+    if floor_number == 1:
+        return "до отм. 0,000"
+    elif floor_number >= 2:
+        return "выше отм. 0,000"
+    else:
+        return None
+
+
 def parse_concrete_properties(name, psets):
     """Парсинг свойств бетона из имени и PSets"""
     props = {
@@ -324,6 +369,10 @@ def extract_ifc_data(ifc_path):
         category = classify_element(element, name, psets)
         material_props = parse_concrete_properties(name, psets)
 
+        # Парсинг секции и определение категории уровня
+        prefix, section_number, floor_number = parse_section_number(name)
+        level_category = get_level_category(floor_number)
+
         item["category"] = category
         item["material"] = material_props["material"]
         item["concrete_class"] = material_props["class"]
@@ -331,6 +380,10 @@ def extract_ifc_data(ifc_path):
         item["water_permeability"] = material_props["water"]
         item["is_reinforced"] = material_props["reinforced"]
         item["material_detail"] = material_props["type_detail"]
+        item["Категория уровня"] = level_category if level_category else ""
+        item["prefix"] = prefix if prefix else ""
+        item["section_number"] = section_number if section_number else ""
+        item["floor_number"] = floor_number if floor_number else ""
 
         elements_data.append(item)
 
