@@ -1,10 +1,46 @@
-```
+```gitignore
+# Excel files
+*.xlsx
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Editors
+.vscode/
+.idea/
+
 # Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+.Python
+*.so
+*.egg-info/
+.eggs/
 
-# Excel files (assuming test artifacts)
-test_session/*.xlsx
+# Dependencies
+.venv/
+venv/
+.env/
+node_modules/
+
+# Build artifacts
+dist/
+build/
+*.egg-info
+.coverage
+coverage/
+htmlcov/
+
+# OS generated files
+.DS_Store
+Thumbs.db
 ```
