@@ -1,10 +1,13 @@
 ```
-# Compiled Python files
-*.pyc
+# Python
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
 
-# Environment files
-.env
-.env.local
-*.env.*
+# Uploads (assuming temporary/generated files)
+uploads/
+
+# Logs
+*.log
 ```
